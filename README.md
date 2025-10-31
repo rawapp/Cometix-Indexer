@@ -125,18 +125,17 @@
 
 #### 3. `codebase_search` - 语义搜索
 **入参：**
-- `query: string` - 必需，搜索查询
-- `workspacePath?: string` - 可选，指定要搜索的工作区路径（如果索引了多个项目则必需）
-- `paths_include_glob?: string` - 可选，包含文件模式
-- `paths_exclude_glob?: string` - 可选，排除文件模式
+- `query: string` - **必需**，搜索查询（自然语言描述）
+- `workspacePath: string` - **必需**，要搜索的工作区路径（必须与 index_project 使用的路径一致）
+- `paths_include_glob?: string` - 可选，包含文件模式（如 `src/**/*.ts`）
+- `paths_exclude_glob?: string` - 可选，排除文件模式（如 `**/*.test.ts`）
 - `max_results?: number` - 可选，最大结果数（默认 10）
 
 **行为：**
-- 在已索引的工作区内搜索
-- 如果有多个已索引工作区，必须指定 `workspacePath`
-- 如果只有一个已索引工作区，自动使用它
-- 搜索前自动进行增量同步
+- 在指定的已索引工作区内搜索
+- 搜索前自动进行增量同步（如有文件变更）
 - 支持 glob 模式过滤结果
+- **注意**：`workspacePath` 必须与调用 `index_project` 时使用的路径完全一致
 
 **返回：**
 ```json
@@ -188,28 +187,27 @@ index_status({ workspacePath: "/Users/saner/Code/meiyi/scm-mq" })
 // 步骤 5: 完成后开始搜索
 codebase_search({
   query: "user authentication flow",
-  workspacePath: "/Users/saner/Code/meiyi/scm-mq",  // 如果索引了多个项目则必需
+  workspacePath: "/Users/saner/Code/meiyi/scm-mq",  // 必需，必须与 index_project 的路径一致
   max_results: 10
 })
 ```
 
 **多工作区场景：**
 ```javascript
-// 如果索引了多个项目
+// 索引多个项目
 index_project({ workspacePath: "/path/to/project1" })
 index_project({ workspacePath: "/path/to/project2" })
 
-// 搜索时必须指定 workspacePath
+// 搜索时指定要搜索的工作区（必需）
 codebase_search({
   query: "authentication",
-  workspacePath: "/path/to/project1"  // 👈 必需，指定搜索哪个项目
+  workspacePath: "/path/to/project1"  // 必需参数
 })
 
-// 如果不指定，会提示：
-// Error: Multiple indexed workspaces found (2). Please specify workspacePath.
-//   Available workspaces:
-//     - /path/to/project1
-//     - /path/to/project2
+codebase_search({
+  query: "payment processing", 
+  workspacePath: "/path/to/project2"  // 搜索不同的项目
+})
 ```
 
 **如果修改了 .gitignore：**

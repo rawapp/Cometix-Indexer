@@ -8,7 +8,7 @@ import picomatch from "picomatch";
 
 export type SearchParams = {
   query: string;
-  workspacePath?: string;
+  workspacePath: string;
   pathsIncludeGlob?: string;
   pathsExcludeGlob?: string;
   maxResults: number;
@@ -17,31 +17,9 @@ export type SearchParams = {
 export function createCodeSearcher(ctx: { authToken: string; baseUrl: string }, indexer: { autoSyncIfNeeded: (workspacePath: string) => Promise<void> }) {
   async function search(params: SearchParams) {
     console.error(`[SEARCH] Starting search for: "${params.query}"`);
+    console.error(`[SEARCH] Workspace: ${params.workspacePath}`);
     
-    // Determine workspace to search
-    let workspacePath: string;
-    
-    if (params.workspacePath) {
-      // Use explicitly provided workspace
-      workspacePath = params.workspacePath;
-      console.error(`[SEARCH] Using specified workspace: ${workspacePath}`);
-    } else {
-      // Auto-detect: requires exactly one indexed workspace
-      const indexed = await listIndexedWorkspaces();
-      console.error(`[SEARCH] Found ${indexed.length} indexed workspace(s)`);
-      
-      if (indexed.length === 0) {
-        throw new Error("No indexed workspaces found. Please run index_project first.");
-      } else if (indexed.length > 1) {
-        throw new Error(
-          `Multiple indexed workspaces found (${indexed.length}). Please specify which one to search by adding workspacePath parameter.\n` +
-          `Available workspaces:\n${indexed.map(w => `  - ${w}`).join('\n')}`
-        );
-      }
-      
-      workspacePath = indexed[0];
-      console.error(`[SEARCH] Auto-selected workspace: ${workspacePath}`);
-    }
+    const workspacePath = params.workspacePath;
 
     // pre-search sync if pending changes
     console.error(`[SEARCH] Checking for pending changes...`);

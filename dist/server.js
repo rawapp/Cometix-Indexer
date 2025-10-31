@@ -16,7 +16,7 @@ export async function createMcpServer(server, ctx) {
     });
     const codebaseSearchArgsSchema = z.object({
         query: z.string(),
-        workspacePath: z.string().optional(),
+        workspacePath: z.string(),
         paths_include_glob: z.string().optional(),
         paths_exclude_glob: z.string().optional(),
         max_results: z.number().int().positive().optional(),
@@ -47,7 +47,7 @@ export async function createMcpServer(server, ctx) {
             paths_exclude_glob: { type: "string" },
             max_results: { type: "integer", minimum: 1 },
         },
-        required: ["query"],
+        required: ["query", "workspacePath"],
     };
     server.setRequestHandler(ListToolsRequestSchema, async () => {
         return ListToolsResultSchema.parse({
@@ -64,7 +64,7 @@ export async function createMcpServer(server, ctx) {
                 },
                 {
                     name: "codebase_search",
-                    description: "Searches indexed codebase using semantic search. If you have multiple indexed workspaces, specify workspacePath to choose which one to search. If only one workspace is indexed, it will be auto-selected. Query should describe functionality/concept in natural language. Use paths_include_glob/paths_exclude_glob to filter results by file patterns. Requires workspace to be indexed first with index_project.",
+                    description: "Searches indexed codebase using semantic search. REQUIRED: workspacePath must match the path used in index_project. Query describes functionality/concept in natural language. Use paths_include_glob/paths_exclude_glob to filter results. Must call index_project first to index the workspace.",
                     inputSchema: codebaseSearchInputJsonSchema,
                 },
             ],
