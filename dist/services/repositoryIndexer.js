@@ -276,6 +276,7 @@ export function createRepositoryIndexer(ctx) {
     const scheduled = new Set();
     async function indexProject(params) {
         const workspacePath = path.resolve(params.workspacePath);
+        console.error(`[INDEX] Starting indexing for: ${workspacePath}`);
         let st = await loadWorkspaceState(workspacePath);
         if (!st.orthogonalTransformSeed) {
             st.orthogonalTransformSeed = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
@@ -289,14 +290,19 @@ export function createRepositoryIndexer(ctx) {
         const defaultListPath = path.join(projectDir, "embeddable_files.txt");
         await fs.ensureDir(path.dirname(defaultListPath));
         if (!(await fs.pathExists(defaultListPath))) {
+            console.error(`[INDEX] Scanning workspace for files (limit: ${DEFAULTS.SYNC_LIST_LIMIT})...`);
             const discovered = await listFiles(workspacePath, DEFAULTS.SYNC_LIST_LIMIT);
+            console.error(`[INDEX] Found ${discovered.length} files, creating file list...`);
             await fs.writeFile(defaultListPath, discovered.map((p) => path.relative(workspacePath, p).replace(/\\/g, "/")).join("\n"), "utf8");
         }
+        console.error(`[INDEX] Building Merkle tree...`);
         const merkle = await merkleBuild(workspacePath);
+        console.error(`[INDEX] Reading embeddable files list...`);
         const allFilesAbs = await readEmbeddableFilesList(workspacePath, defaultListPath);
         if (allFilesAbs.length === 0) {
             throw new Error("embeddableFilesPath yielded empty file list");
         }
+        console.error(`[INDEX] Filtering ${allFilesAbs.length} files (max size: ${DEFAULTS.FILE_SIZE_LIMIT_BYTES} bytes)...`);
         const filtered = allFilesAbs.filter((abs) => {
             try {
                 const s = fs.statSync(abs);
@@ -307,6 +313,7 @@ export function createRepositoryIndexer(ctx) {
             }
         });
         const batches = chunkArray(filtered, DEFAULTS.INITIAL_UPLOAD_MAX_FILES);
+        console.error(`[INDEX] Will upload ${filtered.length} files in ${batches.length} batches (${DEFAULTS.INITIAL_UPLOAD_MAX_FILES} files per batch)`);
         // Use stable repoName for consistent server mapping; persist it in state
         const repoName = st.repoName || `local-${crypto.createHash("sha256").update(workspacePath).digest("hex").slice(0, 12)}`;
         // perform a full cycle per batch: handshake -> upload -> ensure -> sync complete
@@ -314,10 +321,16 @@ export function createRepositoryIndexer(ctx) {
         let totalUploaded = 0;
         const uploadedFilesVerbose = [];
         let lastCodebaseId = st.codebaseId;
-        for (const batch of batches) {
+        for (let i = 0; i < batches.length; i++) {
+            const batch = batches[i];
+            console.error(`[INDEX] Processing batch ${i + 1}/${batches.length} (${batch.length} files)...`);
+            console.error(`[INDEX]   - Performing handshake...`);
             const { codebaseId, repositoryPb, simhash, pathKeyHash } = await initialHandshake(merkle, { ...st, workspacePath, orthogonalTransformSeed: st.orthogonalTransformSeed }, pathKey, ctx.baseUrl, ctx.authToken, repoName);
             // upload chunk
-            totalUploaded += await uploadFilesChunk(batch, workspacePath, scheme, st.orthogonalTransformSeed, codebaseId, ctx.baseUrl, ctx.authToken, encryptedToPlainPath);
+            console.error(`[INDEX]   - Uploading ${batch.length} files...`);
+            const uploaded = await uploadFilesChunk(batch, workspacePath, scheme, st.orthogonalTransformSeed, codebaseId, ctx.baseUrl, ctx.authToken, encryptedToPlainPath);
+            totalUploaded += uploaded;
+            console.error(`[INDEX]   - Uploaded ${uploaded} files`);
             if (params.verbose) {
                 for (const abs of batch) {
                     const rel = path.relative(workspacePath, abs).replace(/\\/g, "/");
@@ -325,10 +338,13 @@ export function createRepositoryIndexer(ctx) {
                 }
             }
             // ensure + sync complete for this chunk
+            console.error(`[INDEX]   - Finalizing batch (ensure index + sync complete)...`);
             await runEnsureAndSyncComplete(ctx.baseUrl, ctx.authToken, repositoryPb, codebaseId, simhash, pathKeyHash);
             lastCodebaseId = codebaseId;
             setRuntimeCodebaseId(workspacePath, codebaseId);
+            console.error(`[INDEX]   - Batch ${i + 1}/${batches.length} complete (codebaseId: ${codebaseId})`);
         }
+        console.error(`[INDEX] Saving workspace state...`);
         st = {
             ...st,
             workspacePath,
@@ -341,13 +357,16 @@ export function createRepositoryIndexer(ctx) {
         await saveWorkspaceState(st);
         // start watcher and schedule auto-sync
         if (!startedWatchers.has(workspacePath)) {
+            console.error(`[INDEX] Starting file watcher...`);
             startFileWatcher(workspacePath);
             startedWatchers.add(workspacePath);
         }
         if (!scheduled.has(workspacePath)) {
+            console.error(`[INDEX] Scheduling auto-sync (every ${DEFAULTS.AUTO_SYNC_INTERVAL_MS / 1000 / 60} minutes)...`);
             scheduleAutoSync(workspacePath);
             scheduled.add(workspacePath);
         }
+        console.error(`[INDEX] ✓ Indexing complete! CodebaseId: ${lastCodebaseId}, Uploaded: ${totalUploaded} files`);
         const base = { codebaseId: lastCodebaseId, uploaded: totalUploaded, batches: batches.length, nextSyncAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
         if (params.verbose)
             base.files = uploadedFilesVerbose;

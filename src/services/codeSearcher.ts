@@ -15,20 +15,25 @@ export type SearchParams = {
 
 export function createCodeSearcher(ctx: { authToken: string; baseUrl: string }, indexer: { autoSyncIfNeeded: (workspacePath: string) => Promise<void> }) {
   async function search(params: SearchParams) {
+    console.error(`[SEARCH] Starting search for: "${params.query}"`);
+    
     // Determine the single indexed workspace to search within
     const indexed = await listIndexedWorkspaces();
     if (indexed.length !== 1) {
       throw new Error("codebase_search requires exactly one indexed workspace. Please ensure a single workspace is indexed.");
     }
     const workspacePath = indexed[0];
+    console.error(`[SEARCH] Using workspace: ${workspacePath}`);
 
     // pre-search sync if pending changes
+    console.error(`[SEARCH] Checking for pending changes...`);
     await indexer.autoSyncIfNeeded(workspacePath);
 
     const st = await loadWorkspaceState(workspacePath);
     if (!st.codebaseId || !st.pathKey) {
       throw new Error("Workspace not indexed yet. Run index_project first.");
     }
+    
     const repositoryPb = {
       relativeWorkspacePath: ".",
       isTracked: false,
@@ -43,12 +48,17 @@ export function createCodeSearcher(ctx: { authToken: string; baseUrl: string }, 
       remoteUrls: [],
       remoteNames: [],
     } as any;
+    
+    console.error(`[SEARCH] Querying remote index (codebaseId: ${st.codebaseId})...`);
     const res = await searchRepositoryV2(ctx.baseUrl, ctx.authToken, {
       query: params.query,
       repository: repositoryPb,
       topK: params.maxResults,
     });
+    
     const codeResults = (res?.code_results || res?.codeResults || []) as any[];
+    console.error(`[SEARCH] Received ${codeResults.length} results from server`);
+    
     const scheme = new V1MasterKeyedEncryptionScheme(st.pathKey);
     const hits = codeResults.map((r) => {
       const block = r?.code_block || r?.codeBlock || {};
@@ -65,6 +75,7 @@ export function createCodeSearcher(ctx: { authToken: string; baseUrl: string }, 
       const score = r?.score ?? 0;
       return { path: decPath, score, startLine: sp.line ?? null, endLine: ep.line ?? null };
     });
+    
     // Apply include/exclude globs if provided
     const includeMatcher = params.pathsIncludeGlob ? picomatch(params.pathsIncludeGlob) : null;
     const excludeMatcher = params.pathsExcludeGlob ? picomatch(params.pathsExcludeGlob) : null;
@@ -74,6 +85,8 @@ export function createCodeSearcher(ctx: { authToken: string; baseUrl: string }, 
       if (excludeMatcher && excludeMatcher(p)) return false;
       return true;
     });
+    
+    console.error(`[SEARCH] ✓ Search complete! Returning ${filtered.slice(0, params.maxResults).length} results (filtered from ${codeResults.length})`);
     return { total: filtered.length, hits: filtered.slice(0, params.maxResults) };
   }
   return { search };

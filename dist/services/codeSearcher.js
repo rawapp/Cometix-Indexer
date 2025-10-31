@@ -5,13 +5,16 @@ import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix } from "../crypto/
 import picomatch from "picomatch";
 export function createCodeSearcher(ctx, indexer) {
     async function search(params) {
+        console.error(`[SEARCH] Starting search for: "${params.query}"`);
         // Determine the single indexed workspace to search within
         const indexed = await listIndexedWorkspaces();
         if (indexed.length !== 1) {
             throw new Error("codebase_search requires exactly one indexed workspace. Please ensure a single workspace is indexed.");
         }
         const workspacePath = indexed[0];
+        console.error(`[SEARCH] Using workspace: ${workspacePath}`);
         // pre-search sync if pending changes
+        console.error(`[SEARCH] Checking for pending changes...`);
         await indexer.autoSyncIfNeeded(workspacePath);
         const st = await loadWorkspaceState(workspacePath);
         if (!st.codebaseId || !st.pathKey) {
@@ -31,12 +34,14 @@ export function createCodeSearcher(ctx, indexer) {
             remoteUrls: [],
             remoteNames: [],
         };
+        console.error(`[SEARCH] Querying remote index (codebaseId: ${st.codebaseId})...`);
         const res = await searchRepositoryV2(ctx.baseUrl, ctx.authToken, {
             query: params.query,
             repository: repositoryPb,
             topK: params.maxResults,
         });
         const codeResults = (res?.code_results || res?.codeResults || []);
+        console.error(`[SEARCH] Received ${codeResults.length} results from server`);
         const scheme = new V1MasterKeyedEncryptionScheme(st.pathKey);
         const hits = codeResults.map((r) => {
             const block = r?.code_block || r?.codeBlock || {};
@@ -65,6 +70,7 @@ export function createCodeSearcher(ctx, indexer) {
                 return false;
             return true;
         });
+        console.error(`[SEARCH] ✓ Search complete! Returning ${filtered.slice(0, params.maxResults).length} results (filtered from ${codeResults.length})`);
         return { total: filtered.length, hits: filtered.slice(0, params.maxResults) };
     }
     return { search };
