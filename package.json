@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p .",
     "prepare": "npm run build",
+    "postinstall": "chmod +x dist/index.js",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "start:with-token": "node dist/index.js --auth-token",
