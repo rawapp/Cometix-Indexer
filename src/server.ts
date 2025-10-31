@@ -62,12 +62,12 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
       tools: [
         {
           name: "index_project",
-          description: "Starts indexing a codebase. Returns immediately with status 'started'. Indexing continues in background. Use `index_status` to check progress. Set `rescan: true` to force re-scanning with latest .gitignore rules. For large codebases (>500 files), indexing may take 1-3 minutes.",
+          description: "Starts indexing a codebase (runs in background, returns immediately with estimated time). First-time indexing automatically scans and respects .gitignore rules. Subsequent calls use cached file list for speed. Set `rescan: true` ONLY if .gitignore was modified since last index - this forces full workspace re-scan. Use `index_status` to monitor progress. Estimated time: ~5-15s for <100 files, ~20-60s for 100-500 files, ~1-3min for 500-1000 files.",
           inputSchema: indexProjectInputJsonSchema,
         },
         {
           name: "index_status",
-          description: "Check the indexing progress for a workspace. Returns current status (idle/scanning/uploading/completed/error), progress percentage, batch info, estimated completion time, and any errors. Call this to monitor long-running index_project operations.",
+          description: "Check indexing progress. Returns: status (idle/scanning/uploading/completed/error), current/total batches, uploaded/total files, progress %, estimated completion time. Poll this every 5-10 seconds while status is 'scanning' or 'uploading' to monitor progress. When status='completed', indexing is done.",
           inputSchema: indexStatusInputJsonSchema,
         },
         {
