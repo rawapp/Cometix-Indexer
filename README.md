@@ -60,28 +60,129 @@
 ```
 
 ### MCP 工具
-- `index_project`
-  - 入参：`{ workspacePath: string; verbose?: boolean }`
-  - 行为：初始化/刷新索引，按批全量上传并计划自动同步；当 `verbose=true` 时，额外返回本轮上传的相对路径文件列表。
-  - 返回：`{ codebaseId, uploaded, batches, nextSyncAt }`
 
-- `codebase_search`
-  - 入参：`{ query: string; paths_include_glob?: string; paths_exclude_glob?: string; max_results?: number }`
-  - 行为：在“唯一一个”已索引工作区内进行搜索；支持包含/排除 glob 过滤（基于工作区相对路径），并在搜索前进行按需增量同步。
-  - 返回：`{ total, hits: Array<{ path, score, startLine, endLine }> }`
+#### 1. `index_project` - 索引代码库（异步，立即返回）
+**入参：**
+- `workspacePath: string` - 必需，项目路径
+- `verbose?: boolean` - 可选，是否返回详细文件列表
+- `rescan?: boolean` - 可选，**仅在 .gitignore 修改后使用**，强制重新扫描
 
-示例（概念性）：
+**行为：**
+- 在后台启动索引，立即返回（避免 60s 超时）
+- 首次索引：自动扫描并遵守 .gitignore 规则
+- 再次索引：使用缓存的文件列表（更快）
+- `rescan=true`：强制重新扫描，应用最新的 .gitignore（仅在 .gitignore 修改后需要）
+
+**返回：**
 ```json
 {
-  "name": "index_project",
-  "arguments": { "workspacePath": "E:/project" }
+  "status": "started",
+  "estimatedTime": "~45 seconds",
+  "estimatedCompletionAt": "2025-10-31T10:30:00.000Z",
+  "instructions": ["使用 index_status 监控进度"]
 }
 ```
+
+**预计时间：**
+- < 100 文件：~5-15 秒
+- 100-500 文件：~20-60 秒
+- 500-1000 文件：~1-3 分钟
+
+#### 2. `index_status` - 查询索引进度
+**入参：**
+- `workspacePath: string` - 必需，项目路径
+
+**行为：**
+- 查询实时索引进度
+- 返回状态、进度百分比、预计完成时间
+- 建议每 5-10 秒轮询一次
+
+**返回：**
 ```json
 {
-  "name": "codebase_search",
-  "arguments": { "query": "What is the xxx paper", "paths_include_glob": "src/**/*.rs", "paths_exclude_glob": "**/tests/**", "max_results": 50 }
+  "status": "uploading",
+  "message": "Uploading batch 5/10 (50% complete)",
+  "currentBatch": 5,
+  "totalBatches": 10,
+  "uploadedFiles": 250,
+  "totalFiles": 500,
+  "estimatedCompletion": "2025-10-31T10:30:00.000Z"
 }
+```
+
+**状态值：**
+- `idle` - 未开始或已完成
+- `scanning` - 正在扫描工作区
+- `uploading` - 正在上传文件
+- `completed` - 索引完成
+- `error` - 索引失败
+
+#### 3. `codebase_search` - 语义搜索
+**入参：**
+- `query: string` - 必需，搜索查询
+- `paths_include_glob?: string` - 可选，包含文件模式
+- `paths_exclude_glob?: string` - 可选，排除文件模式
+- `max_results?: number` - 可选，最大结果数
+
+**行为：**
+- 在已索引的工作区内搜索
+- 搜索前自动进行增量同步
+- 支持 glob 模式过滤结果
+
+**返回：**
+```json
+{
+  "total": 15,
+  "hits": [
+    {
+      "path": "src/auth/middleware.ts",
+      "score": 0.92,
+      "startLine": 15,
+      "endLine": 28
+    }
+  ]
+}
+```
+
+### 使用示例
+
+**工作流程：**
+```javascript
+// 步骤 1: 开始索引
+index_project({ 
+  workspacePath: "/Users/saner/Code/meiyi/scm-mq",
+  rescan: false  // 首次索引或 .gitignore 未变化
+})
+// 返回: { status: "started", estimatedTime: "~45 seconds", ... }
+
+// 步骤 2: 等待 10 秒后检查进度
+// （等待 10 秒）
+index_status({ 
+  workspacePath: "/Users/saner/Code/meiyi/scm-mq" 
+})
+// 返回: { status: "uploading", message: "Uploading batch 3/5 (60% complete)", ... }
+
+// 步骤 3: 继续等待，直到完成
+// （再等待 20 秒）
+index_status({ 
+  workspacePath: "/Users/saner/Code/meiyi/scm-mq" 
+})
+// 返回: { status: "completed", message: "Indexing complete! ..." }
+
+// 步骤 4: 开始搜索
+codebase_search({
+  query: "user authentication flow",
+  max_results: 10
+})
+```
+
+**如果修改了 .gitignore：**
+```javascript
+// 使用 rescan=true 重新扫描
+index_project({ 
+  workspacePath: "/Users/saner/Code/meiyi/scm-mq",
+  rescan: true  // 👈 应用新的 .gitignore 规则
+})
 ```
 
 ### 目录结构（核心）
