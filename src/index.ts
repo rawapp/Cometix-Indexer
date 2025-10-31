@@ -64,10 +64,11 @@ async function main() {
 
 // Handle uncaught errors
 process.on("uncaughtException", (error: any) => {
-  // EPIPE and ECONNRESET are common when clients disconnect - don't crash
+  // EPIPE and ECONNRESET are common when clients disconnect - gracefully shutdown
   if (error?.code === "EPIPE" || error?.code === "ECONNRESET") {
-    log("INFO", `Client disconnected (${error.code})`);
-    return; // Don't exit - this is normal
+    // Don't log to stderr as it might trigger more EPIPE errors
+    // Just exit gracefully
+    process.exit(0);
   }
   
   log("ERROR", "Uncaught exception", error);
@@ -79,10 +80,7 @@ process.on("unhandledRejection", (reason) => {
   process.exit(1);
 });
 
-// Ignore SIGPIPE - common when writing to closed pipes (client disconnect)
-process.on("SIGPIPE", () => {
-  log("INFO", "Received SIGPIPE (client disconnected)");
-});
+// SIGPIPE is already ignored by Node.js by default - no handler needed
 
 // eslint-disable-next-line @typescript-eslint/no-floating-promises
 main();
