@@ -2,6 +2,18 @@ import fs from "fs-extra";
 import path from "path";
 import { getProjectDirForWorkspace, getProjectRootDir } from "../utils/env.js";
 
+export type IndexingProgress = {
+  status: "idle" | "scanning" | "uploading" | "completed" | "error";
+  message?: string;
+  currentBatch?: number;
+  totalBatches?: number;
+  uploadedFiles?: number;
+  totalFiles?: number;
+  startedAt?: string;
+  estimatedCompletion?: string;
+  error?: string;
+};
+
 export type WorkspaceState = {
   workspacePath: string;
   codebaseId?: string;
@@ -11,11 +23,28 @@ export type WorkspaceState = {
   repoOwner?: string;
   // Ephemeral (not persisted):
   pendingChanges?: boolean;
+  // Indexing progress (runtime only, not persisted to disk)
+  indexingProgress?: IndexingProgress;
 };
+
+// Runtime-only progress tracking (not persisted to disk)
+const indexingProgressMap = new Map<string, IndexingProgress>();
 
 function getWorkspaceStateFile(workspacePath: string): string {
   const dir = getProjectDirForWorkspace(workspacePath);
   return path.join(dir, "state.json");
+}
+
+export function setIndexingProgress(workspacePath: string, progress: IndexingProgress): void {
+  indexingProgressMap.set(workspacePath, progress);
+}
+
+export function getIndexingProgress(workspacePath: string): IndexingProgress | undefined {
+  return indexingProgressMap.get(workspacePath);
+}
+
+export function clearIndexingProgress(workspacePath: string): void {
+  indexingProgressMap.delete(workspacePath);
 }
 
 export async function loadWorkspaceState(workspacePath: string): Promise<WorkspaceState> {

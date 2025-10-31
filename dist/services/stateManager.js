@@ -1,9 +1,20 @@
 import fs from "fs-extra";
 import path from "path";
 import { getProjectDirForWorkspace, getProjectRootDir } from "../utils/env.js";
+// Runtime-only progress tracking (not persisted to disk)
+const indexingProgressMap = new Map();
 function getWorkspaceStateFile(workspacePath) {
     const dir = getProjectDirForWorkspace(workspacePath);
     return path.join(dir, "state.json");
+}
+export function setIndexingProgress(workspacePath, progress) {
+    indexingProgressMap.set(workspacePath, progress);
+}
+export function getIndexingProgress(workspacePath) {
+    return indexingProgressMap.get(workspacePath);
+}
+export function clearIndexingProgress(workspacePath) {
+    indexingProgressMap.delete(workspacePath);
 }
 export async function loadWorkspaceState(workspacePath) {
     const file = getWorkspaceStateFile(workspacePath);

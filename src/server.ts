@@ -16,6 +16,10 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
     rescan: z.boolean().optional(),
   });
 
+  const indexStatusArgsSchema = z.object({
+    workspacePath: z.string(),
+  });
+
   const codebaseSearchArgsSchema = z.object({
     query: z.string(),
     paths_include_glob: z.string().optional(),
@@ -30,6 +34,14 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
       workspacePath: { type: "string" },
       verbose: { type: "boolean" },
       rescan: { type: "boolean" },
+    },
+    required: ["workspacePath"],
+  } as const;
+
+  const indexStatusInputJsonSchema = {
+    type: "object",
+    properties: {
+      workspacePath: { type: "string" },
     },
     required: ["workspacePath"],
   } as const;
@@ -50,8 +62,13 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
       tools: [
         {
           name: "index_project",
-          description: "Creates or updates a semantic index of the codebase for a given project directory. This is a necessary first step before using `semantic_search`. The indexing process is optimized to be run once; it will then automatically keep the index in sync with file changes. Set `rescan: true` to force re-scanning the workspace and applying latest .gitignore rules (useful if .gitignore changed).",
+          description: "Starts indexing a codebase. Returns immediately with status 'started'. Indexing continues in background. Use `index_status` to check progress. Set `rescan: true` to force re-scanning with latest .gitignore rules. For large codebases (>500 files), indexing may take 1-3 minutes.",
           inputSchema: indexProjectInputJsonSchema,
+        },
+        {
+          name: "index_status",
+          description: "Check the indexing progress for a workspace. Returns current status (idle/scanning/uploading/completed/error), progress percentage, batch info, estimated completion time, and any errors. Call this to monitor long-running index_project operations.",
+          inputSchema: indexStatusInputJsonSchema,
         },
         {
           name: "codebase_search",
@@ -93,15 +110,46 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
         const { workspacePath, verbose, rescan } = indexProjectArgsSchema.parse(args || {});
         console.error(`[TOOL] Parsed args - workspacePath: ${workspacePath}, verbose: ${verbose}, rescan: ${rescan}`);
         
-        // Execute synchronously (faster batches to avoid timeout)
-        const result = await indexer.indexProject({ workspacePath, verbose: !!verbose, rescan: !!rescan });
-        console.error(`[TOOL] index_project completed successfully`);
+        // Start indexing in background and get estimation
+        console.error(`[TOOL] Starting background indexing task...`);
+        const estimate = await indexer.indexProjectAsync({ workspacePath, verbose: !!verbose, rescan: !!rescan });
         
+        // Return immediately with estimated time
+        const response = {
+          status: "started",
+          message: "Indexing started in background. Use index_status to check progress.",
+          workspacePath,
+          estimatedTime: estimate.estimatedDescription,
+          estimatedCompletionAt: estimate.estimatedCompletion,
+          instructions: [
+            `Expected to complete in ${estimate.estimatedDescription}`,
+            "Monitor progress: Call index_status({ workspacePath: \"" + workspacePath + "\" })",
+            "View detailed logs: tail -f " + (process.env.COMETIX_LOG_FILE || "/tmp/cometix-indexer.log"),
+          ]
+        };
+        
+        console.error(`[TOOL] Returned immediate response (estimated: ${estimate.estimatedDescription}), indexing continues in background`);
         return CompatibilityCallToolResultSchema.parse({
-          content: [{ type: "text", text: JSON.stringify(result) }],
+          content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
         });
       } catch (error) {
         console.error(`[TOOL] ERROR in index_project:`, error);
+        throw error;
+      }
+    }
+    
+    if (name === "index_status") {
+      console.error(`[TOOL] Processing index_status...`);
+      try {
+        const { workspacePath } = indexStatusArgsSchema.parse(args || {});
+        const status = await indexer.getIndexStatus(workspacePath);
+        console.error(`[TOOL] index_status result: ${status.status}`);
+        
+        return CompatibilityCallToolResultSchema.parse({
+          content: [{ type: "text", text: JSON.stringify(status, null, 2) }],
+        });
+      } catch (error) {
+        console.error(`[TOOL] ERROR in index_status:`, error);
         throw error;
       }
     }

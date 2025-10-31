@@ -7,7 +7,7 @@ import { listFiles, readEmbeddableFilesList, shouldIgnore, clearGitignoreCache }
 import { Semaphore } from "../utils/semaphore.js";
 import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix, encryptPathWindows, genPathKey, sha256Hex } from "../crypto/pathEncryption.js";
 import { ensureIndexCreated, fastRepoInitHandshakeV2, fastRepoSyncComplete, fastUpdateFileV2, syncMerkleSubtreeV2 } from "../client/cursorApi.js";
-import { loadWorkspaceState, saveWorkspaceState, setRuntimeCodebaseId, getRuntimeCodebaseId } from "./stateManager.js";
+import { loadWorkspaceState, saveWorkspaceState, setRuntimeCodebaseId, getRuntimeCodebaseId, setIndexingProgress, getIndexingProgress } from "./stateManager.js";
 import { startFileWatcher } from "./fileWatcher.js";
 export function createRepositoryIndexer(ctx) {
     async function buildAncestorSpline(relPath) {
@@ -274,6 +274,28 @@ export function createRepositoryIndexer(ctx) {
     }
     const startedWatchers = new Set();
     const scheduled = new Set();
+    /**
+     * Estimate indexing time based on file count
+     * Assumes ~2 seconds per batch + overhead
+     */
+    function estimateIndexingTime(fileCount) {
+        const batchSize = DEFAULTS.INITIAL_UPLOAD_MAX_FILES;
+        const batches = Math.ceil(fileCount / batchSize);
+        const secondsPerBatch = 2; // Average time per batch
+        const overhead = 5; // Initial setup time
+        const totalSeconds = (batches * secondsPerBatch) + overhead;
+        let description = "";
+        if (totalSeconds < 30) {
+            description = `~${totalSeconds} seconds`;
+        }
+        else if (totalSeconds < 120) {
+            description = `~${Math.round(totalSeconds / 60)} minute${totalSeconds >= 90 ? 's' : ''}`;
+        }
+        else {
+            description = `~${Math.round(totalSeconds / 60)} minutes`;
+        }
+        return { seconds: totalSeconds, description };
+    }
     async function indexProject(params) {
         const workspacePath = path.resolve(params.workspacePath);
         console.error(`[INDEX] Starting indexing for: ${workspacePath}`);
@@ -301,6 +323,11 @@ export function createRepositoryIndexer(ctx) {
                 console.error(`[INDEX] Rescan requested - deleting existing file list`);
                 await fs.remove(defaultListPath);
             }
+            setIndexingProgress(workspacePath, {
+                status: "scanning",
+                message: "Scanning workspace for files...",
+                startedAt: new Date().toISOString(),
+            });
             console.error(`[INDEX] Scanning workspace for files (limit: ${DEFAULTS.SYNC_LIST_LIMIT})...`);
             const discovered = await listFiles(workspacePath, DEFAULTS.SYNC_LIST_LIMIT);
             console.error(`[INDEX] Created file list with ${discovered.length} files at: ${defaultListPath}`);
@@ -334,6 +361,21 @@ export function createRepositoryIndexer(ctx) {
         }
         const batches = chunkArray(filtered, DEFAULTS.INITIAL_UPLOAD_MAX_FILES);
         console.error(`[INDEX] Will upload ${filtered.length} files in ${batches.length} batches (${DEFAULTS.INITIAL_UPLOAD_MAX_FILES} files per batch)`);
+        // Calculate estimated time
+        const estimate = estimateIndexingTime(filtered.length);
+        const estimatedCompletion = new Date(Date.now() + estimate.seconds * 1000).toISOString();
+        console.error(`[INDEX] Estimated time: ${estimate.description} (${batches.length} batches × ~2s/batch + overhead)`);
+        // Set initial progress
+        setIndexingProgress(workspacePath, {
+            status: "uploading",
+            message: `Uploading ${filtered.length} files in ${batches.length} batches`,
+            currentBatch: 0,
+            totalBatches: batches.length,
+            uploadedFiles: 0,
+            totalFiles: filtered.length,
+            startedAt: new Date().toISOString(),
+            estimatedCompletion,
+        });
         // Use stable repoName for consistent server mapping; persist it in state
         const repoName = st.repoName || `local-${crypto.createHash("sha256").update(workspacePath).digest("hex").slice(0, 12)}`;
         // perform a full cycle per batch: handshake -> upload -> ensure -> sync complete
@@ -344,13 +386,28 @@ export function createRepositoryIndexer(ctx) {
         for (let i = 0; i < batches.length; i++) {
             const batch = batches[i];
             console.error(`[INDEX] Processing batch ${i + 1}/${batches.length} (${batch.length} files)...`);
+            // Update progress
+            const progressPercent = Math.round((i / batches.length) * 100);
+            const remainingBatches = batches.length - i;
+            const remainingSeconds = remainingBatches * 2; // ~2s per batch
+            const newEstimatedCompletion = new Date(Date.now() + remainingSeconds * 1000).toISOString();
+            setIndexingProgress(workspacePath, {
+                status: "uploading",
+                message: `Uploading batch ${i + 1}/${batches.length} (${progressPercent}% complete)`,
+                currentBatch: i + 1,
+                totalBatches: batches.length,
+                uploadedFiles: totalUploaded,
+                totalFiles: filtered.length,
+                startedAt: new Date().toISOString(),
+                estimatedCompletion: newEstimatedCompletion,
+            });
             console.error(`[INDEX]   - Performing handshake...`);
             const { codebaseId, repositoryPb, simhash, pathKeyHash } = await initialHandshake(merkle, { ...st, workspacePath, orthogonalTransformSeed: st.orthogonalTransformSeed }, pathKey, ctx.baseUrl, ctx.authToken, repoName);
             // upload chunk
             console.error(`[INDEX]   - Uploading ${batch.length} files...`);
             const uploaded = await uploadFilesChunk(batch, workspacePath, scheme, st.orthogonalTransformSeed, codebaseId, ctx.baseUrl, ctx.authToken, encryptedToPlainPath);
             totalUploaded += uploaded;
-            console.error(`[INDEX]   - Uploaded ${uploaded} files`);
+            console.error(`[INDEX]   - Uploaded ${uploaded} files (total: ${totalUploaded}/${filtered.length})`);
             if (params.verbose) {
                 for (const abs of batch) {
                     const rel = path.relative(workspacePath, abs).replace(/\\/g, "/");
@@ -362,7 +419,7 @@ export function createRepositoryIndexer(ctx) {
             await runEnsureAndSyncComplete(ctx.baseUrl, ctx.authToken, repositoryPb, codebaseId, simhash, pathKeyHash);
             lastCodebaseId = codebaseId;
             setRuntimeCodebaseId(workspacePath, codebaseId);
-            console.error(`[INDEX]   - Batch ${i + 1}/${batches.length} complete (codebaseId: ${codebaseId})`);
+            console.error(`[INDEX]   - Batch ${i + 1}/${batches.length} complete (${progressPercent}% done, ~${Math.round(remainingSeconds / 60)}min remaining)`);
         }
         console.error(`[INDEX] Saving workspace state...`);
         st = {
@@ -387,10 +444,105 @@ export function createRepositoryIndexer(ctx) {
             scheduled.add(workspacePath);
         }
         console.error(`[INDEX] ✓ Indexing complete! CodebaseId: ${lastCodebaseId}, Uploaded: ${totalUploaded} files`);
+        // Mark as completed
+        setIndexingProgress(workspacePath, {
+            status: "completed",
+            message: `Indexing complete! Uploaded ${totalUploaded} files`,
+            currentBatch: batches.length,
+            totalBatches: batches.length,
+            uploadedFiles: totalUploaded,
+            totalFiles: filtered.length,
+            startedAt: new Date().toISOString(),
+        });
         const base = { codebaseId: lastCodebaseId, uploaded: totalUploaded, batches: batches.length, nextSyncAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
         if (params.verbose)
             base.files = uploadedFilesVerbose;
         return base;
+    }
+    // Async version that runs in background and returns estimated info immediately
+    async function indexProjectAsync(params) {
+        const workspacePath = path.resolve(params.workspacePath);
+        // Quick scan to get file count for estimation
+        const projectDir = (await import("./stateManager.js")).getWorkspaceProjectDir(workspacePath);
+        const defaultListPath = path.join(projectDir, "embeddable_files.txt");
+        let fileCount = 0;
+        if (await fs.pathExists(defaultListPath) && !params.rescan) {
+            // Read existing file list for quick estimate
+            const content = await fs.readFile(defaultListPath, "utf8");
+            fileCount = content.split('\n').filter(l => l.trim()).length;
+        }
+        else {
+            // Estimate based on quick directory scan (just count, don't filter)
+            try {
+                const quickScan = await listFiles(workspacePath, 10);
+                fileCount = quickScan.length; // This will trigger the scan anyway
+            }
+            catch {
+                fileCount = 100; // Default estimate
+            }
+        }
+        const estimate = estimateIndexingTime(fileCount);
+        const estimatedCompletion = new Date(Date.now() + estimate.seconds * 1000).toISOString();
+        // Set initial status
+        setIndexingProgress(workspacePath, {
+            status: "scanning",
+            message: "Starting workspace scan...",
+            totalFiles: fileCount,
+            startedAt: new Date().toISOString(),
+            estimatedCompletion,
+        });
+        // Run in background
+        indexProject(params)
+            .then(result => {
+            console.error(`[BACKGROUND] Indexing completed for ${workspacePath}`);
+            console.error(`[BACKGROUND] Result: ${JSON.stringify(result)}`);
+        })
+            .catch(error => {
+            console.error(`[BACKGROUND] Indexing failed for ${workspacePath}:`, error);
+            setIndexingProgress(workspacePath, {
+                status: "error",
+                message: "Indexing failed",
+                error: error.message || String(error),
+                startedAt: new Date().toISOString(),
+            });
+        });
+        return {
+            estimatedSeconds: estimate.seconds,
+            estimatedDescription: estimate.description,
+            estimatedCompletion,
+        };
+    }
+    // Get indexing status
+    async function getIndexStatus(workspacePath) {
+        const resolvedPath = path.resolve(workspacePath);
+        const progress = getIndexingProgress(resolvedPath);
+        if (!progress) {
+            // Check if already indexed
+            const st = await loadWorkspaceState(resolvedPath);
+            if (st.codebaseId) {
+                return {
+                    status: "idle",
+                    message: "Workspace already indexed. Call index_project to re-index.",
+                    totalFiles: 0,
+                };
+            }
+            else {
+                return {
+                    status: "idle",
+                    message: "Workspace not yet indexed. Call index_project to start.",
+                    totalFiles: 0,
+                };
+            }
+        }
+        // Calculate progress percentage
+        let progressPercent = 0;
+        if (progress.totalBatches && progress.currentBatch) {
+            progressPercent = Math.round((progress.currentBatch / progress.totalBatches) * 100);
+        }
+        return {
+            ...progress,
+            message: progress.message + ` (${progressPercent}%)`,
+        };
     }
     async function autoSyncIfNeeded(workspacePath) {
         const st = await loadWorkspaceState(workspacePath);
@@ -419,6 +571,12 @@ export function createRepositoryIndexer(ctx) {
     function scheduleAutoSync(workspacePath) {
         setInterval(() => { void autoSyncIfNeeded(workspacePath); }, DEFAULTS.AUTO_SYNC_INTERVAL_MS);
     }
-    return { indexProject, autoSyncIfNeeded, scheduleAutoSync };
+    return {
+        indexProject,
+        indexProjectAsync,
+        getIndexStatus,
+        autoSyncIfNeeded,
+        scheduleAutoSync
+    };
 }
 //# sourceMappingURL=repositoryIndexer.js.map
