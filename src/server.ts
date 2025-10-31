@@ -90,8 +90,11 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
       try {
         const { workspacePath, verbose } = indexProjectArgsSchema.parse(args || {});
         console.error(`[TOOL] Parsed args - workspacePath: ${workspacePath}, verbose: ${verbose}`);
+        
+        // Execute synchronously (faster batches to avoid timeout)
         const result = await indexer.indexProject({ workspacePath, verbose: !!verbose });
         console.error(`[TOOL] index_project completed successfully`);
+        
         return CompatibilityCallToolResultSchema.parse({
           content: [{ type: "text", text: JSON.stringify(result) }],
         });
