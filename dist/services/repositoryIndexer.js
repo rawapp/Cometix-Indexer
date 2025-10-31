@@ -276,21 +276,21 @@ export function createRepositoryIndexer(ctx) {
     const scheduled = new Set();
     /**
      * Estimate indexing time based on file count and batch size
-     * Based on actual measurements:
-     * - Scanning: ~1-3 seconds for most projects
-     * - Per batch: ~3-5 seconds (handshake + upload + ensure + sync)
-     * - Overhead: ~5 seconds initial setup
+     * With optimized settings (batch size 500, concurrency 16):
+     * - Scanning: ~2-3 seconds for most projects
+     * - Per batch (500 files): ~5-8 seconds (handshake + upload + ensure + sync)
+     * - Overhead: ~3 seconds initial setup
      */
     function estimateIndexingTime(fileCount) {
         const batchSize = DEFAULTS.INITIAL_UPLOAD_MAX_FILES;
         const batches = Math.ceil(fileCount / batchSize);
-        // More realistic timing based on actual network operations
-        const scanningTime = 3; // File scanning
-        const secondsPerBatch = 4; // Handshake + upload + ensure + sync
-        const overhead = 5; // Initial setup
+        // Optimized timing with larger batches (500 files per batch)
+        const scanningTime = 2; // File scanning (faster with concurrency 16)
+        const secondsPerBatch = 6; // Larger batches take a bit longer per batch
+        const overhead = 3; // Initial setup (reduced)
         const totalSeconds = overhead + scanningTime + (batches * secondsPerBatch);
-        // Add 20% safety margin for network variance
-        const safeSeconds = Math.ceil(totalSeconds * 1.2);
+        // Add 15% safety margin (reduced from 20% due to more consistent large batches)
+        const safeSeconds = Math.ceil(totalSeconds * 1.15);
         let description = "";
         let whenToCheck = "";
         if (safeSeconds < 30) {
