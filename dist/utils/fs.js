@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs-extra";
+import ignore from "ignore";
 const IGNORE_PATTERNS = [
     "node_modules/",
     ".git/",
@@ -13,9 +14,49 @@ const IGNORE_PATTERNS = [
     ".env",
     ".env.",
 ];
+// Cache for gitignore instances per workspace
+const gitignoreCache = new Map();
+function loadGitignore(workspacePath) {
+    if (gitignoreCache.has(workspacePath)) {
+        return gitignoreCache.get(workspacePath);
+    }
+    const ig = ignore();
+    // Always add default patterns
+    ig.add(IGNORE_PATTERNS);
+    // Try to load .gitignore file
+    const gitignorePath = path.join(workspacePath, ".gitignore");
+    try {
+        if (fs.existsSync(gitignorePath)) {
+            const content = fs.readFileSync(gitignorePath, "utf8");
+            ig.add(content);
+            console.error(`[FS] Loaded .gitignore from ${workspacePath} (${content.split('\n').filter(l => l.trim() && !l.startsWith('#')).length} patterns)`);
+        }
+        else {
+            console.error(`[FS] No .gitignore found in ${workspacePath}, using default patterns only`);
+        }
+    }
+    catch (error) {
+        console.error(`[FS] Warning: Failed to load .gitignore:`, error);
+    }
+    gitignoreCache.set(workspacePath, ig);
+    return ig;
+}
 export function shouldIgnore(fileAbs, workspacePath) {
     const rel = path.relative(workspacePath, fileAbs).replace(/\\/g, "/");
-    return IGNORE_PATTERNS.some((p) => (p.endsWith("/") ? rel.startsWith(p) : rel.includes(p)));
+    // Use gitignore for pattern matching
+    const ig = loadGitignore(workspacePath);
+    return ig.ignores(rel);
+}
+// Clear gitignore cache for a workspace (useful if .gitignore changes)
+export function clearGitignoreCache(workspacePath) {
+    if (workspacePath) {
+        gitignoreCache.delete(workspacePath);
+        console.error(`[FS] Cleared .gitignore cache for ${workspacePath}`);
+    }
+    else {
+        gitignoreCache.clear();
+        console.error(`[FS] Cleared all .gitignore caches`);
+    }
 }
 export async function listFiles(workspacePath, limit = 1000) {
     const out = [];
