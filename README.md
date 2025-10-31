@@ -150,6 +150,71 @@ npm run start -- --auth-token 你的Token
 - `CURSOR_AUTH_TOKEN`（必需）
 - `CURSOR_BASE_URL`（默认 `https://api2.cursor.sh`）
 - `LOG_LEVEL`（`debug` | `info` | `warning` | `error`，默认 `info`）
+- `COMETIX_LOG_FILE`（可选，指定日志文件路径，如 `/tmp/cometix-indexer.log`）
+
+### 查看日志与调试
+
+#### 方法 1: 查看 Cursor/Claude Desktop 的 MCP 日志
+MCP 服务器的输出会被记录到 Cursor 或 Claude Desktop 的日志中：
+
+**Cursor:**
+- macOS: `~/Library/Logs/Cursor/`
+- Windows: `%APPDATA%\Cursor\logs\`
+- Linux: `~/.config/Cursor/logs/`
+
+**Claude Desktop:**
+- macOS: `~/Library/Logs/Claude/`
+- Windows: `%APPDATA%\Claude\logs\`
+- Linux: `~/.config/Claude/logs/`
+
+查看最新日志：
+```bash
+# macOS (Cursor)
+tail -f ~/Library/Logs/Cursor/main.log
+
+# macOS (Claude Desktop)  
+tail -f ~/Library/Logs/Claude/mcp*.log
+```
+
+#### 方法 2: 使用日志文件（推荐用于调试）
+在 MCP 配置中添加 `COMETIX_LOG_FILE` 环境变量：
+
+```json
+{
+  "mcpServers": {
+    "cometix-indexer": {
+      "command": "npx",
+      "args": ["-y", "--package=git+https://github.com/CometixAI/Cometix-Indexer.git", "cometix-indexer", "start"],
+      "env": {
+        "CURSOR_AUTH_TOKEN": "your-token",
+        "CURSOR_BASE_URL": "https://api2.cursor.sh",
+        "COMETIX_LOG_FILE": "/tmp/cometix-indexer.log"
+      }
+    }
+  }
+}
+```
+
+然后实时查看日志：
+```bash
+tail -f /tmp/cometix-indexer.log
+```
+
+#### 方法 3: 独立测试运行
+直接在命令行运行以查看即时输出：
+```bash
+# 使用 npx
+CURSOR_AUTH_TOKEN="your-token" COMETIX_LOG_FILE="/tmp/cometix.log" \
+  npx -y --package=git+https://github.com/CometixAI/Cometix-Indexer.git cometix-indexer start
+
+# 本地开发
+CURSOR_AUTH_TOKEN="your-token" npm run start
+```
+
+日志会输出到 stderr，包含：
+- 启动信息（版本、配置等）
+- MCP 服务器初始化过程
+- 错误和异常堆栈信息
 
 ### 环境变量与默认值（可调优）
 - `SYNC_CONCURRENCY`（默认 4）
