@@ -259,8 +259,44 @@ npm run build
 - 搜索结果会自动尝试使用本地 `pathKey` 解密为 Posix 相对路径，失败时回退为原始加密串。
 
 ### 忽略与限制
-- 默认忽略：`node_modules/`、`.git/`、`.cursor/`、`dist/`、`build/`、`coverage/` 等。
-- 超过 `FILE_SIZE_LIMIT_BYTES` 的文件会被跳过。
+
+**自动 .gitignore 支持（新功能）：**
+- 🎯 **自动读取项目根目录的 `.gitignore` 文件**
+- 完全兼容 gitignore 语法（支持 `!` 排除、`**` 通配符等）
+- 与默认忽略规则结合使用
+- 提升索引速度，避免索引不需要的文件
+
+**默认忽略规则（始终生效）：**
+- `node_modules/`、`.git/`、`.cursor/`
+- `dist/`、`build/`、`coverage/`、`.nyc_output/`
+- `.DS_Store`、`Thumbs.db`
+- `.env`、`.env.*`
+
+**文件大小限制：**
+- 超过 `FILE_SIZE_LIMIT_BYTES`（默认 2MB）的文件会被跳过
+
+**示例 .gitignore 用法：**
+```gitignore
+# 构建输出
+/dist/
+/build/
+
+# 日志文件
+*.log
+!important.log  # 但保留这个
+
+# 临时文件
+/tmp/
+*.tmp
+
+# 测试文件
+**/*.test.js
+**/__tests__/
+
+# IDE 配置
+.vscode/
+.idea/
+```
 
 ### 常见问题
 - 报错 `repository_service.proto not found`：请确认项目根目录存在 `proto/repository_service.proto`。
