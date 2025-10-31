@@ -54,11 +54,19 @@ function sha256HexLocal(str: string): string {
 
 export function getProjectDirForWorkspace(workspacePath: string): string {
   const base = getProjectRootDir();
-  const safeName = workspacePath
+  
+  // Always resolve to absolute path to ensure consistent directory names
+  const absolutePath = path.resolve(workspacePath);
+  
+  // Create a safe directory name from the absolute path
+  const safeName = absolutePath
     .replace(/[\\/:*?"<>|]/g, "_")
     .replace(/\s+/g, "_")
     .slice(0, 60) || "project";
-  const hash = sha256HexLocal(workspacePath).slice(0, 10);
+  
+  // Hash the absolute path for uniqueness
+  const hash = sha256HexLocal(absolutePath).slice(0, 10);
+  
   return path.join(base, `${safeName}-${hash}`);
 }
 

@@ -63,9 +63,11 @@
 
 #### 1. `index_project` - 索引代码库（异步，立即返回）
 **入参：**
-- `workspacePath: string` - 必需，项目路径
+- `workspacePath: string` - **必需，使用绝对路径**（如 `/Users/saner/Code/myproject`，不要用 `.` 或相对路径）
 - `verbose?: boolean` - 可选，是否返回详细文件列表
 - `rescan?: boolean` - 可选，**仅在 .gitignore 修改后使用**，强制重新扫描
+
+⚠️ **重要**：必须使用**绝对路径**！相对路径（如 `.`）会根据进程的当前目录解析，可能不是您期望的目录。
 
 **行为：**
 - 在后台启动索引，立即返回（避免 60s 超时）

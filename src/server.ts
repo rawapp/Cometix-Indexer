@@ -64,7 +64,7 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
       tools: [
         {
           name: "index_project",
-          description: "Starts indexing (background task, returns immediately with estimated completion time). Auto-scans with .gitignore on first run. Uses cached file list on subsequent runs (faster). Set rescan=true ONLY if .gitignore was modified. Returns estimated time - WAIT for that duration, then call index_status to verify completion. Time estimates: 10-20s (<100 files), 20-60s (100-500 files), 1-3min (500-1000 files). Don't poll index_status before estimated time - let indexing finish first!",
+          description: "Starts indexing (background, returns immediately with estimated time). IMPORTANT: Use absolute path for workspacePath (e.g., '/Users/name/Code/project', not '.'). Auto-scans with .gitignore on first run. Uses cached file list on subsequent runs. Set rescan=true ONLY if .gitignore changed. Returns estimated time - WAIT for it, then call index_status. Estimates: 10-20s (<100 files), 20-60s (100-500 files), 1-3min (500-1000 files).",
           inputSchema: indexProjectInputJsonSchema,
         },
         {

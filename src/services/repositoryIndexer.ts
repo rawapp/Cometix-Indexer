@@ -321,6 +321,14 @@ export function createRepositoryIndexer(ctx: IndexerContext) {
 
   async function indexProject(params: { workspacePath: string; verbose?: boolean; rescan?: boolean }) {
     const workspacePath = path.resolve(params.workspacePath);
+    
+    // Warn about relative paths
+    if (!path.isAbsolute(params.workspacePath)) {
+      console.error(`[INDEX] ⚠️  Warning: Relative path detected: "${params.workspacePath}"`);
+      console.error(`[INDEX] Resolved to: "${workspacePath}"`);
+      console.error(`[INDEX] Tip: Use absolute paths to avoid ambiguity (e.g., "/Users/saner/Code/myproject")`);
+    }
+    
     console.error(`[INDEX] Starting indexing for: ${workspacePath}`);
     
     if (params.rescan) {
