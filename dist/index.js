@@ -1,29 +1,35 @@
 #!/usr/bin/env node
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { createMcpServer } from "./server.js";
-import { resolveAuthAndBaseUrlFromCliAndEnv } from "./utils/env.js";
 import fs from "fs";
-// Log to stderr (stdout is reserved for MCP protocol)
-function log(level, message, error) {
-    const timestamp = new Date().toISOString();
-    const logMessage = `[${timestamp}] [${level}] ${message}`;
-    // Always log to stderr
-    console.error(logMessage);
-    // Also log errors with stack traces
-    if (error) {
-        console.error(error);
-    }
-    // Optionally log to file
+// Override console.error FIRST to capture all logs to file
+const originalConsoleError = console.error;
+console.error = function (...args) {
+    // Call original console.error
+    originalConsoleError.apply(console, args);
+    // Also write to log file if configured
     const logFile = process.env.COMETIX_LOG_FILE;
     if (logFile) {
         try {
-            const fullMessage = error ? `${logMessage}\n${error.stack || error}\n` : `${logMessage}\n`;
-            fs.appendFileSync(logFile, fullMessage);
+            const message = args.map(arg => typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)).join(' ') + '\n';
+            fs.appendFileSync(logFile, message);
         }
         catch (e) {
             // Ignore file write errors
         }
+    }
+};
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { createMcpServer } from "./server.js";
+import { resolveAuthAndBaseUrlFromCliAndEnv } from "./utils/env.js";
+// Log to stderr (stdout is reserved for MCP protocol)
+function log(level, message, error) {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level}] ${message}`;
+    // Always log to stderr (which now also goes to file)
+    console.error(logMessage);
+    // Also log errors with stack traces
+    if (error) {
+        console.error(error);
     }
 }
 async function main() {
