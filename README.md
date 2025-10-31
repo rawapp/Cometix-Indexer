@@ -125,12 +125,15 @@
 #### 3. `codebase_search` - 语义搜索
 **入参：**
 - `query: string` - 必需，搜索查询
+- `workspacePath?: string` - 可选，指定要搜索的工作区路径（如果索引了多个项目则必需）
 - `paths_include_glob?: string` - 可选，包含文件模式
 - `paths_exclude_glob?: string` - 可选，排除文件模式
-- `max_results?: number` - 可选，最大结果数
+- `max_results?: number` - 可选，最大结果数（默认 10）
 
 **行为：**
 - 在已索引的工作区内搜索
+- 如果有多个已索引工作区，必须指定 `workspacePath`
+- 如果只有一个已索引工作区，自动使用它
 - 搜索前自动进行增量同步
 - 支持 glob 模式过滤结果
 
@@ -184,8 +187,28 @@ index_status({ workspacePath: "/Users/saner/Code/meiyi/scm-mq" })
 // 步骤 5: 完成后开始搜索
 codebase_search({
   query: "user authentication flow",
+  workspacePath: "/Users/saner/Code/meiyi/scm-mq",  // 如果索引了多个项目则必需
   max_results: 10
 })
+```
+
+**多工作区场景：**
+```javascript
+// 如果索引了多个项目
+index_project({ workspacePath: "/path/to/project1" })
+index_project({ workspacePath: "/path/to/project2" })
+
+// 搜索时必须指定 workspacePath
+codebase_search({
+  query: "authentication",
+  workspacePath: "/path/to/project1"  // 👈 必需，指定搜索哪个项目
+})
+
+// 如果不指定，会提示：
+// Error: Multiple indexed workspaces found (2). Please specify workspacePath.
+//   Available workspaces:
+//     - /path/to/project1
+//     - /path/to/project2
 ```
 
 **如果修改了 .gitignore：**
