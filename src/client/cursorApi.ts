@@ -1,4 +1,4 @@
-import { postProto } from "./proto";
+import { postProto } from "./proto.js";
 
 export type RepositoryPb = {
   relativeWorkspacePath: string;

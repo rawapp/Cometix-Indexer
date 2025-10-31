@@ -1,7 +1,7 @@
 import { ListToolsRequestSchema, ListToolsResultSchema, CallToolRequestSchema, CompatibilityCallToolResultSchema, ListPromptsRequestSchema, ListPromptsResultSchema, ListResourcesRequestSchema, ListResourcesResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { createRepositoryIndexer } from "./services/repositoryIndexer";
-import { createCodeSearcher } from "./services/codeSearcher";
+import { createRepositoryIndexer } from "./services/repositoryIndexer.js";
+import { createCodeSearcher } from "./services/codeSearcher.js";
 
 export type ServerContext = { authToken: string; baseUrl: string };
 

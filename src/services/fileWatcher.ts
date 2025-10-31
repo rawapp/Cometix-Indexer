@@ -1,5 +1,5 @@
 import chokidar from "chokidar";
-import { saveWorkspaceState, loadWorkspaceState } from "./stateManager";
+import { saveWorkspaceState, loadWorkspaceState } from "./stateManager.js";
 
 export function startFileWatcher(workspacePath: string): void {
   const watcher = chokidar.watch(workspacePath, {

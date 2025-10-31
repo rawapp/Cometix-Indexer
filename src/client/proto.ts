@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs-extra";
 import protobuf from "protobufjs";
-import { DEFAULTS, defaultHeaders } from "../utils/env";
+import { DEFAULTS, defaultHeaders } from "../utils/env.js";
 
 let protoRootPromise: Promise<protobuf.Root> | undefined;
 

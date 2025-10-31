@@ -2,13 +2,13 @@ import path from "path";
 import fs from "fs-extra";
 import crypto from "crypto";
 import { MerkleClient } from "@anysphere/file-service";
-import { DEFAULTS } from "../utils/env";
-import { listFiles, readEmbeddableFilesList, shouldIgnore } from "../utils/fs";
-import { Semaphore } from "../utils/semaphore";
-import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix, encryptPathWindows, genPathKey, sha256Hex } from "../crypto/pathEncryption";
-import { ensureIndexCreated, fastRepoInitHandshakeV2, fastRepoSyncComplete, fastUpdateFileV2, syncMerkleSubtreeV2 } from "../client/cursorApi";
-import { loadWorkspaceState, saveWorkspaceState, WorkspaceState, setRuntimeCodebaseId, getRuntimeCodebaseId } from "./stateManager";
-import { startFileWatcher } from "./fileWatcher";
+import { DEFAULTS } from "../utils/env.js";
+import { listFiles, readEmbeddableFilesList, shouldIgnore } from "../utils/fs.js";
+import { Semaphore } from "../utils/semaphore.js";
+import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix, encryptPathWindows, genPathKey, sha256Hex } from "../crypto/pathEncryption.js";
+import { ensureIndexCreated, fastRepoInitHandshakeV2, fastRepoSyncComplete, fastUpdateFileV2, syncMerkleSubtreeV2 } from "../client/cursorApi.js";
+import { loadWorkspaceState, saveWorkspaceState, WorkspaceState, setRuntimeCodebaseId, getRuntimeCodebaseId } from "./stateManager.js";
+import { startFileWatcher } from "./fileWatcher.js";
 
 export type IndexerContext = { authToken: string; baseUrl: string };
 

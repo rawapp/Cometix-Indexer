@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { createMcpServer } from "./server";
-import { resolveAuthAndBaseUrlFromCliAndEnv } from "./utils/env";
+import { createMcpServer } from "./server.js";
+import { resolveAuthAndBaseUrlFromCliAndEnv } from "./utils/env.js";
 import fs from "fs";
 
 // Log to stderr (stdout is reserved for MCP protocol)

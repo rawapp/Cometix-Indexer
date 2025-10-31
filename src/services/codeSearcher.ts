@@ -1,9 +1,9 @@
-import { searchRepositoryV2 } from "../client/cursorApi";
+import { searchRepositoryV2 } from "../client/cursorApi.js";
 import path from "path";
 import fs from "fs-extra";
 import crypto from "crypto";
-import { loadWorkspaceState, listIndexedWorkspaces } from "./stateManager";
-import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix } from "../crypto/pathEncryption";
+import { loadWorkspaceState, listIndexedWorkspaces } from "./stateManager.js";
+import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix } from "../crypto/pathEncryption.js";
 import picomatch from "picomatch";
 
 export type SearchParams = {

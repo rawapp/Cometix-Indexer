@@ -1,6 +1,6 @@
 import fs from "fs-extra";
 import path from "path";
-import { getProjectDirForWorkspace, getProjectRootDir } from "../utils/env";
+import { getProjectDirForWorkspace, getProjectRootDir } from "../utils/env.js";
 
 export type WorkspaceState = {
   workspacePath: string;
