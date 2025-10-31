@@ -1,5 +1,6 @@
 export type SearchParams = {
     query: string;
+    workspacePath?: string;
     pathsIncludeGlob?: string;
     pathsExcludeGlob?: string;
     maxResults: number;

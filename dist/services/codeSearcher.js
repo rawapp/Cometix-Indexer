@@ -6,13 +6,27 @@ import picomatch from "picomatch";
 export function createCodeSearcher(ctx, indexer) {
     async function search(params) {
         console.error(`[SEARCH] Starting search for: "${params.query}"`);
-        // Determine the single indexed workspace to search within
-        const indexed = await listIndexedWorkspaces();
-        if (indexed.length !== 1) {
-            throw new Error("codebase_search requires exactly one indexed workspace. Please ensure a single workspace is indexed.");
+        // Determine workspace to search
+        let workspacePath;
+        if (params.workspacePath) {
+            // Use explicitly provided workspace
+            workspacePath = params.workspacePath;
+            console.error(`[SEARCH] Using specified workspace: ${workspacePath}`);
         }
-        const workspacePath = indexed[0];
-        console.error(`[SEARCH] Using workspace: ${workspacePath}`);
+        else {
+            // Auto-detect: requires exactly one indexed workspace
+            const indexed = await listIndexedWorkspaces();
+            console.error(`[SEARCH] Found ${indexed.length} indexed workspace(s)`);
+            if (indexed.length === 0) {
+                throw new Error("No indexed workspaces found. Please run index_project first.");
+            }
+            else if (indexed.length > 1) {
+                throw new Error(`Multiple indexed workspaces found (${indexed.length}). Please specify which one to search by adding workspacePath parameter.\n` +
+                    `Available workspaces:\n${indexed.map(w => `  - ${w}`).join('\n')}`);
+            }
+            workspacePath = indexed[0];
+            console.error(`[SEARCH] Auto-selected workspace: ${workspacePath}`);
+        }
         // pre-search sync if pending changes
         console.error(`[SEARCH] Checking for pending changes...`);
         await indexer.autoSyncIfNeeded(workspacePath);

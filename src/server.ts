@@ -22,6 +22,7 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
 
   const codebaseSearchArgsSchema = z.object({
     query: z.string(),
+    workspacePath: z.string().optional(),
     paths_include_glob: z.string().optional(),
     paths_exclude_glob: z.string().optional(),
     max_results: z.number().int().positive().optional(),
@@ -50,6 +51,7 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
     type: "object",
     properties: {
       query: { type: "string" },
+      workspacePath: { type: "string" },
       paths_include_glob: { type: "string" },
       paths_exclude_glob: { type: "string" },
       max_results: { type: "integer", minimum: 1 },
@@ -72,7 +74,7 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
         },
         {
           name: "codebase_search",
-          description: "Searches the indexed codebase to find code snippets most relevant to a natural language query. This is a semantic search tool, so the query should describe the desired functionality or concept. For best results, use the user's exact phrasing for the `query`, as their specific wording often contains valuable semantic cues. If the search should be limited to specific files or directories, use the `paths_include_glob` and `paths_exclude_glob` parameters to scope the search. Ensure the project has been indexed with `index_project` first.",
+          description: "Searches indexed codebase using semantic search. If you have multiple indexed workspaces, specify workspacePath to choose which one to search. If only one workspace is indexed, it will be auto-selected. Query should describe functionality/concept in natural language. Use paths_include_glob/paths_exclude_glob to filter results by file patterns. Requires workspace to be indexed first with index_project.",
           inputSchema: codebaseSearchInputJsonSchema,
         },
       ],
@@ -159,9 +161,10 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
     if (name === "codebase_search") {
       console.error(`[TOOL] Processing codebase_search...`);
       try {
-        const { query, paths_include_glob, paths_exclude_glob, max_results } = codebaseSearchArgsSchema.parse(args || {});
+        const { query, workspacePath, paths_include_glob, paths_exclude_glob, max_results } = codebaseSearchArgsSchema.parse(args || {});
         const result = await searcher.search({
           query,
+          workspacePath,
           pathsIncludeGlob: paths_include_glob,
           pathsExcludeGlob: paths_exclude_glob,
           maxResults: (typeof max_results === "number" && max_results > 0) ? max_results : 10,
