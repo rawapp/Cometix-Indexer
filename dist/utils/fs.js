@@ -65,12 +65,20 @@ export function clearGitignoreCache(workspacePath) {
 }
 export async function listFiles(workspacePath, limit = 1000) {
     const out = [];
+    const ignored = [];
+    let totalScanned = 0;
     async function walk(dir) {
         const entries = await fs.readdir(dir, { withFileTypes: true });
         for (const e of entries) {
             const full = path.join(dir, e.name);
-            if (shouldIgnore(full, workspacePath))
+            totalScanned++;
+            if (shouldIgnore(full, workspacePath)) {
+                // Track ignored files (limit to first 100 to avoid memory issues)
+                if (ignored.length < 100) {
+                    ignored.push(path.relative(workspacePath, full));
+                }
                 continue;
+            }
             if (e.isDirectory()) {
                 await walk(full);
                 if (out.length >= limit)
@@ -84,6 +92,18 @@ export async function listFiles(workspacePath, limit = 1000) {
         }
     }
     await walk(workspacePath);
+    // Log summary of ignored files
+    if (ignored.length > 0) {
+        console.error(`[FS] Scanned ${totalScanned} items: ${out.length} included, ${totalScanned - out.length} ignored`);
+        console.error(`[FS] Ignored examples (first ${Math.min(ignored.length, 10)}):`);
+        ignored.slice(0, 10).forEach(f => console.error(`[FS]   - ${f}`));
+        if (ignored.length > 10) {
+            console.error(`[FS]   ... and ${ignored.length - 10} more`);
+        }
+    }
+    else {
+        console.error(`[FS] Scanned ${totalScanned} items: ${out.length} files found, none ignored`);
+    }
     return out;
 }
 export async function readEmbeddableFilesList(root, listPath) {
