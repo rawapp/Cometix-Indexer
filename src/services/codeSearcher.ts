@@ -1,6 +1,7 @@
 import { searchRepositoryV2 } from "../client/cursorApi";
 import path from "path";
 import fs from "fs-extra";
+import crypto from "crypto";
 import { loadWorkspaceState, listIndexedWorkspaces } from "./stateManager";
 import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix } from "../crypto/pathEncryption";
 import picomatch from "picomatch";
@@ -37,7 +38,7 @@ export function createCodeSearcher(ctx: { authToken: string; baseUrl: string }, 
       preferredEmbeddingModel: "EMBEDDING_MODEL_UNSPECIFIED",
       workspaceUri: "",
       // Reuse stable identity from state; fall back to deterministic default
-      repoName: st.repoName || `local-${require("crypto").createHash("sha256").update(workspacePath).digest("hex").slice(0, 12)}`,
+      repoName: st.repoName || `local-${crypto.createHash("sha256").update(workspacePath).digest("hex").slice(0, 12)}`,
       repoOwner: st.repoOwner || "local-user",
       remoteUrls: [],
       remoteNames: [],
