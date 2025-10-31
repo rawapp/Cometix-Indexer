@@ -358,19 +358,36 @@ export function createRepositoryIndexer(ctx) {
             throw new Error("embeddableFilesPath yielded empty file list");
         }
         console.error(`[INDEX] File list contains ${allFilesAbs.length} files`);
-        console.error(`[INDEX] Filtering by size (max: ${DEFAULTS.FILE_SIZE_LIMIT_BYTES} bytes)...`);
-        const filtered = allFilesAbs.filter((abs) => {
+        console.error(`[INDEX] Filtering by size (max: ${Math.round(DEFAULTS.FILE_SIZE_LIMIT_BYTES / 1024)}KB)...`);
+        const filtered = [];
+        const skippedFiles = [];
+        for (const abs of allFilesAbs) {
             try {
                 const s = fs.statSync(abs);
-                return s.isFile() && s.size <= DEFAULTS.FILE_SIZE_LIMIT_BYTES;
+                if (s.isFile()) {
+                    if (s.size <= DEFAULTS.FILE_SIZE_LIMIT_BYTES) {
+                        filtered.push(abs);
+                    }
+                    else {
+                        skippedFiles.push({
+                            path: path.relative(workspacePath, abs),
+                            size: s.size
+                        });
+                    }
+                }
             }
             catch {
-                return false;
+                // File doesn't exist or not accessible
             }
-        });
-        const skippedBySize = allFilesAbs.length - filtered.length;
-        if (skippedBySize > 0) {
-            console.error(`[INDEX] Skipped ${skippedBySize} files exceeding size limit`);
+        }
+        if (skippedFiles.length > 0) {
+            console.error(`[INDEX] Skipped ${skippedFiles.length} files exceeding ${Math.round(DEFAULTS.FILE_SIZE_LIMIT_BYTES / 1024)}KB limit:`);
+            skippedFiles.slice(0, 5).forEach(f => {
+                console.error(`[INDEX]   - ${f.path} (${Math.round(f.size / 1024)}KB)`);
+            });
+            if (skippedFiles.length > 5) {
+                console.error(`[INDEX]   ... and ${skippedFiles.length - 5} more large files`);
+            }
         }
         const batches = chunkArray(filtered, DEFAULTS.INITIAL_UPLOAD_MAX_FILES);
         console.error(`[INDEX] Will upload ${filtered.length} files in ${batches.length} batches (${DEFAULTS.INITIAL_UPLOAD_MAX_FILES} files per batch)`);

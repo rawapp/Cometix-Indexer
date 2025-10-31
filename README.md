@@ -366,8 +366,10 @@ CURSOR_AUTH_TOKEN="your-token" npm run start
 - `PROTO_TIMEOUT_MS`（默认 **120000** = 2分钟）
   - 支持大批次（500文件）的上传
   - 如果批次 > 500，建议增加到 180000（3分钟）
-- `FILE_SIZE_LIMIT_BYTES`（默认 **5MB**，从 2MB 提升）
-  - 可索引更大的文件
+- `FILE_SIZE_LIMIT_BYTES`（默认 **500KB**）
+  - 大多数源代码文件 < 100KB，500KB 已足够
+  - 超过此大小的通常是生成代码、压缩文件或数据文件
+  - 如需索引更大文件（如大型配置），可设置为 `1024 * 1024`（1MB）
 - `SYNC_LIST_LIMIT`（默认 **2000**，从 1000 提升）
   - 支持更大的代码库
 

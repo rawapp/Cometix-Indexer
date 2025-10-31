@@ -63,13 +63,13 @@ export function getProjectDirForWorkspace(workspacePath: string): string {
 }
 
 export const DEFAULTS = {
-  SYNC_CONCURRENCY: parseInt(process.env.SYNC_CONCURRENCY || "16", 10), // Increased to 16 for faster parallel processing
+  SYNC_CONCURRENCY: parseInt(process.env.SYNC_CONCURRENCY || "16", 10), // High concurrency for faster scanning
   SYNC_MAX_NODES: parseInt(process.env.SYNC_MAX_NODES || "2000", 10),
   SYNC_MAX_ITERATIONS: parseInt(process.env.SYNC_MAX_ITERATIONS || "10000", 10),
-  SYNC_LIST_LIMIT: parseInt(process.env.SYNC_LIST_LIMIT || "2000", 10), // Increased from 1000 to 2000
-  FILE_SIZE_LIMIT_BYTES: parseInt(process.env.FILE_SIZE_LIMIT_BYTES || String(5 * 1024 * 1024), 10), // Increased from 2MB to 5MB
-  INITIAL_UPLOAD_MAX_FILES: parseInt(process.env.INITIAL_UPLOAD_MAX_FILES || "500", 10), // Increased from 100 to 500 - fewer batches = faster!
-  PROTO_TIMEOUT_MS: parseInt(process.env.PROTO_TIMEOUT_MS || "120000", 10), // Increased to 120s for large batches
+  SYNC_LIST_LIMIT: parseInt(process.env.SYNC_LIST_LIMIT || "2000", 10), // Support larger codebases
+  FILE_SIZE_LIMIT_BYTES: parseInt(process.env.FILE_SIZE_LIMIT_BYTES || String(500 * 1024), 10), // 500KB - most source files are < 100KB
+  INITIAL_UPLOAD_MAX_FILES: parseInt(process.env.INITIAL_UPLOAD_MAX_FILES || "500", 10), // Large batches for speed
+  PROTO_TIMEOUT_MS: parseInt(process.env.PROTO_TIMEOUT_MS || "120000", 10), // 2min for large batches
   PROTO_SEARCH_TIMEOUT_MS: parseInt(process.env.PROTO_SEARCH_TIMEOUT_MS || "60000", 10),
   AUTO_SYNC_INTERVAL_MS: parseInt(process.env.AUTO_SYNC_INTERVAL_MS || String(5 * 60 * 1000), 10),
 };

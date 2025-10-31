@@ -376,14 +376,36 @@ export function createRepositoryIndexer(ctx: IndexerContext) {
     }
     console.error(`[INDEX] File list contains ${allFilesAbs.length} files`);
     
-    console.error(`[INDEX] Filtering by size (max: ${DEFAULTS.FILE_SIZE_LIMIT_BYTES} bytes)...`);
-    const filtered = allFilesAbs.filter((abs) => {
-      try { const s = fs.statSync(abs); return s.isFile() && s.size <= DEFAULTS.FILE_SIZE_LIMIT_BYTES; } catch { return false; }
-    });
+    console.error(`[INDEX] Filtering by size (max: ${Math.round(DEFAULTS.FILE_SIZE_LIMIT_BYTES / 1024)}KB)...`);
+    const filtered: string[] = [];
+    const skippedFiles: Array<{path: string; size: number}> = [];
     
-    const skippedBySize = allFilesAbs.length - filtered.length;
-    if (skippedBySize > 0) {
-      console.error(`[INDEX] Skipped ${skippedBySize} files exceeding size limit`);
+    for (const abs of allFilesAbs) {
+      try {
+        const s = fs.statSync(abs);
+        if (s.isFile()) {
+          if (s.size <= DEFAULTS.FILE_SIZE_LIMIT_BYTES) {
+            filtered.push(abs);
+          } else {
+            skippedFiles.push({
+              path: path.relative(workspacePath, abs),
+              size: s.size
+            });
+          }
+        }
+      } catch {
+        // File doesn't exist or not accessible
+      }
+    }
+    
+    if (skippedFiles.length > 0) {
+      console.error(`[INDEX] Skipped ${skippedFiles.length} files exceeding ${Math.round(DEFAULTS.FILE_SIZE_LIMIT_BYTES / 1024)}KB limit:`);
+      skippedFiles.slice(0, 5).forEach(f => {
+        console.error(`[INDEX]   - ${f.path} (${Math.round(f.size / 1024)}KB)`);
+      });
+      if (skippedFiles.length > 5) {
+        console.error(`[INDEX]   ... and ${skippedFiles.length - 5} more large files`);
+      }
     }
     
     const batches = chunkArray(filtered, DEFAULTS.INITIAL_UPLOAD_MAX_FILES);
