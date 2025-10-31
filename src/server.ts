@@ -71,33 +71,57 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
 
   server.setRequestHandler(CallToolRequestSchema, async (req: any) => {
     const { name, arguments: args } = req.params as { name: string; arguments?: Record<string, unknown> };
+    
+    console.error(`[TOOL] Received tool call: ${name}`);
+    console.error(`[TOOL] Arguments: ${JSON.stringify(args)}`);
+    
     // Friendly guard: ensure auth token is present at call time
     const missingTokenError = () => CompatibilityCallToolResultSchema.parse({
       content: [{ type: "text", text: "Missing CURSOR_AUTH_TOKEN. Pass --auth-token or set env CURSOR_AUTH_TOKEN before using this tool." }],
       isError: true,
     });
     if (!ctx.authToken) {
+      console.error(`[TOOL] ERROR: Missing auth token`);
       return missingTokenError();
     }
+    
     if (name === "index_project") {
-      const { workspacePath, verbose } = indexProjectArgsSchema.parse(args || {});
-      const result = await indexer.indexProject({ workspacePath, verbose: !!verbose });
-      return CompatibilityCallToolResultSchema.parse({
-        content: [{ type: "text", text: JSON.stringify(result) }],
-      });
+      console.error(`[TOOL] Processing index_project...`);
+      try {
+        const { workspacePath, verbose } = indexProjectArgsSchema.parse(args || {});
+        console.error(`[TOOL] Parsed args - workspacePath: ${workspacePath}, verbose: ${verbose}`);
+        const result = await indexer.indexProject({ workspacePath, verbose: !!verbose });
+        console.error(`[TOOL] index_project completed successfully`);
+        return CompatibilityCallToolResultSchema.parse({
+          content: [{ type: "text", text: JSON.stringify(result) }],
+        });
+      } catch (error) {
+        console.error(`[TOOL] ERROR in index_project:`, error);
+        throw error;
+      }
     }
+    
     if (name === "codebase_search") {
-      const { query, paths_include_glob, paths_exclude_glob, max_results } = codebaseSearchArgsSchema.parse(args || {});
-      const result = await searcher.search({
-        query,
-        pathsIncludeGlob: paths_include_glob,
-        pathsExcludeGlob: paths_exclude_glob,
-        maxResults: (typeof max_results === "number" && max_results > 0) ? max_results : 10,
-      });
-      return CompatibilityCallToolResultSchema.parse({
-        content: [{ type: "text", text: JSON.stringify(result) }],
-      });
+      console.error(`[TOOL] Processing codebase_search...`);
+      try {
+        const { query, paths_include_glob, paths_exclude_glob, max_results } = codebaseSearchArgsSchema.parse(args || {});
+        const result = await searcher.search({
+          query,
+          pathsIncludeGlob: paths_include_glob,
+          pathsExcludeGlob: paths_exclude_glob,
+          maxResults: (typeof max_results === "number" && max_results > 0) ? max_results : 10,
+        });
+        console.error(`[TOOL] codebase_search completed successfully`);
+        return CompatibilityCallToolResultSchema.parse({
+          content: [{ type: "text", text: JSON.stringify(result) }],
+        });
+      } catch (error) {
+        console.error(`[TOOL] ERROR in codebase_search:`, error);
+        throw error;
+      }
     }
+    
+    console.error(`[TOOL] ERROR: Unknown tool: ${name}`);
     return CompatibilityCallToolResultSchema.parse({ content: [{ type: "text", text: "Unknown tool" }], isError: true });
   });
 }
