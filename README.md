@@ -217,15 +217,31 @@ CURSOR_AUTH_TOKEN="your-token" npm run start
 - 错误和异常堆栈信息
 
 ### 环境变量与默认值（可调优）
-- `SYNC_CONCURRENCY`（默认 4）
+
+**性能优化参数（已针对 60s MCP 超时优化）：**
+- `INITIAL_UPLOAD_MAX_FILES`（默认 **100**，初次索引分批大小）
+  - 增加此值可减少批次数量，加快索引速度
+  - 对于大型代码库（> 1000 文件），可设置为 200 或 500
+  - 示例：`export INITIAL_UPLOAD_MAX_FILES=200`
+- `SYNC_CONCURRENCY`（默认 **8**，并发线程数）
+  - 增加此值可加快文件处理速度
+  - 建议范围：4-16
+- `PROTO_TIMEOUT_MS`（默认 **60000**，单个请求超时时间）
+  - 如果批次很大，可能需要增加
+
+**其他配置：**
 - `SYNC_MAX_NODES`（默认 2000）
 - `SYNC_MAX_ITERATIONS`（默认 10000）
 - `SYNC_LIST_LIMIT`（默认 1000）
 - `FILE_SIZE_LIMIT_BYTES`（默认 2MB，超出将跳过）
-- `INITIAL_UPLOAD_MAX_FILES`（默认 10，初次索引分批大小）
-- `PROTO_TIMEOUT_MS`（默认 30000）
 - `PROTO_SEARCH_TIMEOUT_MS`（默认 60000）
 - `AUTO_SYNC_INTERVAL_MS`（默认 5 分钟）
+
+**预期索引时间：**
+- 小型项目（< 100 文件）：< 15 秒
+- 中型项目（100-500 文件）：20-50 秒
+- 大型项目（500-1000 文件）：40-90 秒
+- 超大项目（> 1000 文件）：可能超时，建议增加 INITIAL_UPLOAD_MAX_FILES
 
 ### 开发安装与构建
 ```bash
