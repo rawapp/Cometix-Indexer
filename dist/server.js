@@ -9,6 +9,7 @@ export async function createMcpServer(server, ctx) {
     const indexProjectArgsSchema = z.object({
         workspacePath: z.string(),
         verbose: z.boolean().optional(),
+        rescan: z.boolean().optional(),
     });
     const codebaseSearchArgsSchema = z.object({
         query: z.string(),
@@ -22,6 +23,7 @@ export async function createMcpServer(server, ctx) {
         properties: {
             workspacePath: { type: "string" },
             verbose: { type: "boolean" },
+            rescan: { type: "boolean" },
         },
         required: ["workspacePath"],
     };
@@ -40,7 +42,7 @@ export async function createMcpServer(server, ctx) {
             tools: [
                 {
                     name: "index_project",
-                    description: "Creates or updates a semantic index of the codebase for a given project directory. This is a necessary first step before using `semantic_search`. The indexing process is optimized to be run once; it will then automatically keep the index in sync with file changes. Call this tool to prepare a new project for searching.",
+                    description: "Creates or updates a semantic index of the codebase for a given project directory. This is a necessary first step before using `semantic_search`. The indexing process is optimized to be run once; it will then automatically keep the index in sync with file changes. Set `rescan: true` to force re-scanning the workspace and applying latest .gitignore rules (useful if .gitignore changed).",
                     inputSchema: indexProjectInputJsonSchema,
                 },
                 {
@@ -74,10 +76,10 @@ export async function createMcpServer(server, ctx) {
         if (name === "index_project") {
             console.error(`[TOOL] Processing index_project...`);
             try {
-                const { workspacePath, verbose } = indexProjectArgsSchema.parse(args || {});
-                console.error(`[TOOL] Parsed args - workspacePath: ${workspacePath}, verbose: ${verbose}`);
+                const { workspacePath, verbose, rescan } = indexProjectArgsSchema.parse(args || {});
+                console.error(`[TOOL] Parsed args - workspacePath: ${workspacePath}, verbose: ${verbose}, rescan: ${rescan}`);
                 // Execute synchronously (faster batches to avoid timeout)
-                const result = await indexer.indexProject({ workspacePath, verbose: !!verbose });
+                const result = await indexer.indexProject({ workspacePath, verbose: !!verbose, rescan: !!rescan });
                 console.error(`[TOOL] index_project completed successfully`);
                 return CompatibilityCallToolResultSchema.parse({
                     content: [{ type: "text", text: JSON.stringify(result) }],

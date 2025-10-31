@@ -3,7 +3,7 @@ import fs from "fs-extra";
 import crypto from "crypto";
 import { MerkleClient } from "@anysphere/file-service";
 import { DEFAULTS } from "../utils/env.js";
-import { listFiles, readEmbeddableFilesList, shouldIgnore } from "../utils/fs.js";
+import { listFiles, readEmbeddableFilesList, shouldIgnore, clearGitignoreCache } from "../utils/fs.js";
 import { Semaphore } from "../utils/semaphore.js";
 import { V1MasterKeyedEncryptionScheme, decryptPathToRelPosix, encryptPathWindows, genPathKey, sha256Hex } from "../crypto/pathEncryption.js";
 import { ensureIndexCreated, fastRepoInitHandshakeV2, fastRepoSyncComplete, fastUpdateFileV2, syncMerkleSubtreeV2 } from "../client/cursorApi.js";
@@ -277,6 +277,11 @@ export function createRepositoryIndexer(ctx) {
     async function indexProject(params) {
         const workspacePath = path.resolve(params.workspacePath);
         console.error(`[INDEX] Starting indexing for: ${workspacePath}`);
+        if (params.rescan) {
+            console.error(`[INDEX] Rescan mode enabled - will re-scan workspace with latest .gitignore`);
+            // Clear gitignore cache to reload .gitignore file
+            clearGitignoreCache(workspacePath);
+        }
         let st = await loadWorkspaceState(workspacePath);
         if (!st.orthogonalTransformSeed) {
             st.orthogonalTransformSeed = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
@@ -289,11 +294,21 @@ export function createRepositoryIndexer(ctx) {
         const projectDir = (await import("./stateManager.js")).getWorkspaceProjectDir(workspacePath);
         const defaultListPath = path.join(projectDir, "embeddable_files.txt");
         await fs.ensureDir(path.dirname(defaultListPath));
-        if (!(await fs.pathExists(defaultListPath))) {
+        const fileListExists = await fs.pathExists(defaultListPath);
+        const needsScan = !fileListExists || params.rescan;
+        if (needsScan) {
+            if (params.rescan && fileListExists) {
+                console.error(`[INDEX] Rescan requested - deleting existing file list`);
+                await fs.remove(defaultListPath);
+            }
             console.error(`[INDEX] Scanning workspace for files (limit: ${DEFAULTS.SYNC_LIST_LIMIT})...`);
             const discovered = await listFiles(workspacePath, DEFAULTS.SYNC_LIST_LIMIT);
-            console.error(`[INDEX] Found ${discovered.length} files, creating file list...`);
+            console.error(`[INDEX] Created file list with ${discovered.length} files at: ${defaultListPath}`);
             await fs.writeFile(defaultListPath, discovered.map((p) => path.relative(workspacePath, p).replace(/\\/g, "/")).join("\n"), "utf8");
+        }
+        else {
+            console.error(`[INDEX] Using existing file list: ${defaultListPath}`);
+            console.error(`[INDEX] Tip: To rescan with .gitignore, call with rescan: true`);
         }
         console.error(`[INDEX] Building Merkle tree...`);
         const merkle = await merkleBuild(workspacePath);
@@ -302,7 +317,8 @@ export function createRepositoryIndexer(ctx) {
         if (allFilesAbs.length === 0) {
             throw new Error("embeddableFilesPath yielded empty file list");
         }
-        console.error(`[INDEX] Filtering ${allFilesAbs.length} files (max size: ${DEFAULTS.FILE_SIZE_LIMIT_BYTES} bytes)...`);
+        console.error(`[INDEX] File list contains ${allFilesAbs.length} files`);
+        console.error(`[INDEX] Filtering by size (max: ${DEFAULTS.FILE_SIZE_LIMIT_BYTES} bytes)...`);
         const filtered = allFilesAbs.filter((abs) => {
             try {
                 const s = fs.statSync(abs);
@@ -312,6 +328,10 @@ export function createRepositoryIndexer(ctx) {
                 return false;
             }
         });
+        const skippedBySize = allFilesAbs.length - filtered.length;
+        if (skippedBySize > 0) {
+            console.error(`[INDEX] Skipped ${skippedBySize} files exceeding size limit`);
+        }
         const batches = chunkArray(filtered, DEFAULTS.INITIAL_UPLOAD_MAX_FILES);
         console.error(`[INDEX] Will upload ${filtered.length} files in ${batches.length} batches (${DEFAULTS.INITIAL_UPLOAD_MAX_FILES} files per batch)`);
         // Use stable repoName for consistent server mapping; persist it in state
