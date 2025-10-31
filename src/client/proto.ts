@@ -1,4 +1,5 @@
 import path from "path";
+import { fileURLToPath } from "url";
 import fs from "fs-extra";
 import protobuf from "protobufjs";
 import { DEFAULTS, defaultHeaders } from "../utils/env.js";
@@ -7,9 +8,19 @@ let protoRootPromise: Promise<protobuf.Root> | undefined;
 
 export function loadProtoRoot(): Promise<protobuf.Root> {
   if (!protoRootPromise) {
-    const protoPath = path.resolve(process.cwd(), "proto/repository_service.proto");
+    // Get the directory of this module file
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    
+    // Proto file is at ../../proto/repository_service.proto relative to dist/client/proto.js
+    const protoPath = path.resolve(__dirname, "../../proto/repository_service.proto");
+    
     if (!fs.existsSync(protoPath)) {
-      throw new Error(`repository_service.proto not found at proto/repository_service.proto (relative to project root).`);
+      throw new Error(
+        `repository_service.proto not found at ${protoPath}. ` +
+        `Expected location: proto/repository_service.proto relative to package root. ` +
+        `Current module: ${__filename}`
+      );
     }
     protoRootPromise = protobuf.load(protoPath);
   }
