@@ -260,17 +260,22 @@ npm run build
 
 ### 忽略与限制
 
-**自动 .gitignore 支持（新功能）：**
+**自动 .gitignore 支持：**
 - 🎯 **自动读取项目根目录的 `.gitignore` 文件**
 - 完全兼容 gitignore 语法（支持 `!` 排除、`**` 通配符等）
-- 与默认忽略规则结合使用
+- 尊重用户的忽略规则，不会强制覆盖
 - 提升索引速度，避免索引不需要的文件
 
-**默认忽略规则（始终生效）：**
-- `node_modules/`、`.git/`、`.cursor/`
-- `dist/`、`build/`、`coverage/`、`.nyc_output/`
-- `.DS_Store`、`Thumbs.db`
-- `.env`、`.env.*`
+**最小默认忽略规则（仅 6 个，确保安全和性能）：**
+- `node_modules/` - 依赖包（太大，可重新生成）
+- `.git/` - Git 内部数据（二进制，无索引价值）
+- `.DS_Store`、`Thumbs.db` - 系统元数据（二进制）
+- `.env`、`.env.*` - 环境变量（可能包含密钥）
+
+**✨ 设计理念：**
+- 默认规则只包含**绝对必要**的忽略项（安全、性能）
+- 其他所有规则通过项目的 `.gitignore` 控制
+- 如果你想索引 `dist/` 或 `build/`，只需不在 `.gitignore` 中添加它们
 
 **文件大小限制：**
 - 超过 `FILE_SIZE_LIMIT_BYTES`（默认 2MB）的文件会被跳过

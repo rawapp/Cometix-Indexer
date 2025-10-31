@@ -1,38 +1,43 @@
 import path from "path";
 import fs from "fs-extra";
 import ignore from "ignore";
-const IGNORE_PATTERNS = [
-    "node_modules/",
-    ".git/",
-    ".cursor/",
-    "dist/",
-    "build/",
-    "/coverage/",
-    "/.nyc_output/",
-    ".DS_Store",
-    "Thumbs.db",
-    ".env",
-    ".env.",
+/**
+ * Minimal default ignore patterns that are always applied.
+ * Only includes patterns that should NEVER be indexed (binary, cache, secrets).
+ * Most ignore rules should be in the project's .gitignore file.
+ */
+const DEFAULT_IGNORE_PATTERNS = [
+    "node_modules/", // Dependencies - too large, always regenerated
+    ".git/", // Git internals - binary data, no value
+    ".DS_Store", // macOS metadata - binary
+    "Thumbs.db", // Windows metadata - binary
+    ".env", // Environment variables - may contain secrets
+    ".env.*", // Env variants - may contain secrets
 ];
 // Cache for gitignore instances per workspace
 const gitignoreCache = new Map();
+/**
+ * Load and parse .gitignore file for a workspace.
+ * Combines default ignore patterns with project-specific .gitignore rules.
+ */
 function loadGitignore(workspacePath) {
     if (gitignoreCache.has(workspacePath)) {
         return gitignoreCache.get(workspacePath);
     }
     const ig = ignore();
-    // Always add default patterns
-    ig.add(IGNORE_PATTERNS);
-    // Try to load .gitignore file
+    // Always add default patterns first
+    ig.add(DEFAULT_IGNORE_PATTERNS);
+    // Load and merge project's .gitignore if it exists
     const gitignorePath = path.join(workspacePath, ".gitignore");
     try {
         if (fs.existsSync(gitignorePath)) {
             const content = fs.readFileSync(gitignorePath, "utf8");
             ig.add(content);
-            console.error(`[FS] Loaded .gitignore from ${workspacePath} (${content.split('\n').filter(l => l.trim() && !l.startsWith('#')).length} patterns)`);
+            const userPatterns = content.split('\n').filter(l => l.trim() && !l.startsWith('#')).length;
+            console.error(`[FS] Loaded .gitignore: ${userPatterns} user patterns + ${DEFAULT_IGNORE_PATTERNS.length} default patterns`);
         }
         else {
-            console.error(`[FS] No .gitignore found in ${workspacePath}, using default patterns only`);
+            console.error(`[FS] No .gitignore found, using ${DEFAULT_IGNORE_PATTERNS.length} default patterns only`);
         }
     }
     catch (error) {
