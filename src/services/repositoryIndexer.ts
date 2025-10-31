@@ -280,26 +280,43 @@ export function createRepositoryIndexer(ctx: IndexerContext) {
   const scheduled = new Set<string>();
 
   /**
-   * Estimate indexing time based on file count
-   * Assumes ~2 seconds per batch + overhead
+   * Estimate indexing time based on file count and batch size
+   * Based on actual measurements:
+   * - Scanning: ~1-3 seconds for most projects
+   * - Per batch: ~3-5 seconds (handshake + upload + ensure + sync)
+   * - Overhead: ~5 seconds initial setup
    */
-  function estimateIndexingTime(fileCount: number): { seconds: number; description: string } {
+  function estimateIndexingTime(fileCount: number): { seconds: number; description: string; whenToCheck: string } {
     const batchSize = DEFAULTS.INITIAL_UPLOAD_MAX_FILES;
     const batches = Math.ceil(fileCount / batchSize);
-    const secondsPerBatch = 2; // Average time per batch
-    const overhead = 5; // Initial setup time
-    const totalSeconds = (batches * secondsPerBatch) + overhead;
+    
+    // More realistic timing based on actual network operations
+    const scanningTime = 3; // File scanning
+    const secondsPerBatch = 4; // Handshake + upload + ensure + sync
+    const overhead = 5; // Initial setup
+    
+    const totalSeconds = overhead + scanningTime + (batches * secondsPerBatch);
+    
+    // Add 20% safety margin for network variance
+    const safeSeconds = Math.ceil(totalSeconds * 1.2);
     
     let description = "";
-    if (totalSeconds < 30) {
-      description = `~${totalSeconds} seconds`;
-    } else if (totalSeconds < 120) {
-      description = `~${Math.round(totalSeconds / 60)} minute${totalSeconds >= 90 ? 's' : ''}`;
+    let whenToCheck = "";
+    
+    if (safeSeconds < 30) {
+      description = `${safeSeconds} seconds`;
+      whenToCheck = `${safeSeconds} seconds`;
+    } else if (safeSeconds < 120) {
+      const minutes = Math.ceil(safeSeconds / 60);
+      description = `${minutes} minute${minutes > 1 ? 's' : ''}`;
+      whenToCheck = `${minutes} minute${minutes > 1 ? 's' : ''}`;
     } else {
-      description = `~${Math.round(totalSeconds / 60)} minutes`;
+      const minutes = Math.ceil(safeSeconds / 60);
+      description = `${minutes} minutes`;
+      whenToCheck = `${minutes} minutes`;
     }
     
-    return { seconds: totalSeconds, description };
+    return { seconds: safeSeconds, description, whenToCheck };
   }
 
   async function indexProject(params: { workspacePath: string; verbose?: boolean; rescan?: boolean }) {
@@ -492,7 +509,7 @@ export function createRepositoryIndexer(ctx: IndexerContext) {
   }
   
   // Async version that runs in background and returns estimated info immediately
-  async function indexProjectAsync(params: { workspacePath: string; verbose?: boolean; rescan?: boolean }): Promise<{ estimatedSeconds: number; estimatedDescription: string; estimatedCompletion: string }> {
+  async function indexProjectAsync(params: { workspacePath: string; verbose?: boolean; rescan?: boolean }): Promise<{ estimatedSeconds: number; estimatedDescription: string; estimatedCompletion: string; whenToCheck: string }> {
     const workspacePath = path.resolve(params.workspacePath);
     
     // Quick scan to get file count for estimation
@@ -546,6 +563,7 @@ export function createRepositoryIndexer(ctx: IndexerContext) {
       estimatedSeconds: estimate.seconds,
       estimatedDescription: estimate.description,
       estimatedCompletion,
+      whenToCheck: estimate.whenToCheck,
     };
   }
   

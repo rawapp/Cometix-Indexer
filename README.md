@@ -83,10 +83,15 @@
 }
 ```
 
-**预计时间：**
-- < 100 文件：~5-15 秒
-- 100-500 文件：~20-60 秒
-- 500-1000 文件：~1-3 分钟
+**预计时间（基于实际测量，包含 20% 安全余量）：**
+- < 50 文件：10-15 秒
+- 50-100 文件：15-20 秒
+- 100-300 文件：20-35 秒
+- 300-500 文件：35-60 秒
+- 500-800 文件：1-2 分钟
+- 800-1000 文件：2-3 分钟
+
+**计算公式：** `总时间 = 5秒(初始化) + 3秒(扫描) + (批次数 × 4秒) + 20%安全余量`
 
 #### 2. `index_status` - 查询索引进度
 **入参：**
@@ -146,30 +151,37 @@
 
 ### 使用示例
 
-**工作流程：**
+**异步工作流程（推荐）：**
 ```javascript
 // 步骤 1: 开始索引
-index_project({ 
+const indexResult = index_project({ 
   workspacePath: "/Users/saner/Code/meiyi/scm-mq",
   rescan: false  // 首次索引或 .gitignore 未变化
 })
-// 返回: { status: "started", estimatedTime: "~45 seconds", ... }
+// 立即返回: 
+// {
+//   status: "started",
+//   estimatedTime: "45 seconds",  // 根据文件数量计算
+//   nextStep: "Wait 45 seconds, then call index_status to verify completion"
+// }
 
-// 步骤 2: 等待 10 秒后检查进度
-// （等待 10 秒）
+// 步骤 2: ⏰ 等待预计时间（重要！）
+// 👉 根据返回的 estimatedTime 等待，例如 45 秒
+// 不要立即查询 - 让索引在后台完成
+
+// 步骤 3: 预计时间到达后，检查是否完成
 index_status({ 
   workspacePath: "/Users/saner/Code/meiyi/scm-mq" 
 })
-// 返回: { status: "uploading", message: "Uploading batch 3/5 (60% complete)", ... }
+// 返回: 
+// - 如果完成: { status: "completed", message: "Indexing complete! Uploaded 289 files" }
+// - 如果还在进行: { status: "uploading", currentBatch: 8, totalBatches: 10, message: "80% complete" }
 
-// 步骤 3: 继续等待，直到完成
-// （再等待 20 秒）
-index_status({ 
-  workspacePath: "/Users/saner/Code/meiyi/scm-mq" 
-})
-// 返回: { status: "completed", message: "Indexing complete! ..." }
+// 步骤 4: 如果还未完成，等待 10 秒后再次检查
+// （再等待 10 秒）
+index_status({ workspacePath: "/Users/saner/Code/meiyi/scm-mq" })
 
-// 步骤 4: 开始搜索
+// 步骤 5: 完成后开始搜索
 codebase_search({
   query: "user authentication flow",
   max_results: 10
@@ -338,11 +350,13 @@ CURSOR_AUTH_TOKEN="your-token" npm run start
 - `PROTO_SEARCH_TIMEOUT_MS`（默认 60000）
 - `AUTO_SYNC_INTERVAL_MS`（默认 5 分钟）
 
-**预期索引时间：**
-- 小型项目（< 100 文件）：< 15 秒
-- 中型项目（100-500 文件）：20-50 秒
-- 大型项目（500-1000 文件）：40-90 秒
-- 超大项目（> 1000 文件）：可能超时，建议增加 INITIAL_UPLOAD_MAX_FILES
+**预期索引时间（异步模式，不受 60s 超时限制）：**
+- 小型项目（< 100 文件）：10-20 秒
+- 中型项目（100-500 文件）：20-60 秒
+- 大型项目（500-1000 文件）：1-3 分钟
+- 超大项目（> 1000 文件）：3-10 分钟
+
+💡 **提示**：返回的 `estimatedTime` 是准确估算，等待该时间后再调用 `index_status` 验证完成
 
 ### 开发安装与构建
 ```bash

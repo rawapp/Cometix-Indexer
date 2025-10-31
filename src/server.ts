@@ -62,12 +62,12 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
       tools: [
         {
           name: "index_project",
-          description: "Starts indexing a codebase (runs in background, returns immediately with estimated time). First-time indexing automatically scans and respects .gitignore rules. Subsequent calls use cached file list for speed. Set `rescan: true` ONLY if .gitignore was modified since last index - this forces full workspace re-scan. Use `index_status` to monitor progress. Estimated time: ~5-15s for <100 files, ~20-60s for 100-500 files, ~1-3min for 500-1000 files.",
+          description: "Starts indexing (background task, returns immediately with estimated completion time). Auto-scans with .gitignore on first run. Uses cached file list on subsequent runs (faster). Set rescan=true ONLY if .gitignore was modified. Returns estimated time - WAIT for that duration, then call index_status to verify completion. Time estimates: 10-20s (<100 files), 20-60s (100-500 files), 1-3min (500-1000 files). Don't poll index_status before estimated time - let indexing finish first!",
           inputSchema: indexProjectInputJsonSchema,
         },
         {
           name: "index_status",
-          description: "Check indexing progress. Returns: status (idle/scanning/uploading/completed/error), current/total batches, uploaded/total files, progress %, estimated completion time. Poll this every 5-10 seconds while status is 'scanning' or 'uploading' to monitor progress. When status='completed', indexing is done.",
+          description: "Check indexing progress. IMPORTANT: Only call this AFTER the estimated time from index_project has passed. Returns: status (idle/scanning/uploading/completed/error), progress %, batch info, remaining time. If status='completed', you can start searching. If still 'uploading', wait 10 more seconds and check again. Status values: idle (not started/already done), scanning (finding files), uploading (sending to server), completed (ready to search), error (failed - check error field).",
           inputSchema: indexStatusInputJsonSchema,
         },
         {
@@ -117,14 +117,16 @@ export async function createMcpServer(server: any, ctx: ServerContext): Promise<
         // Return immediately with estimated time
         const response = {
           status: "started",
-          message: "Indexing started in background. Use index_status to check progress.",
+          message: `Indexing started in background. Estimated completion in ${estimate.estimatedDescription}.`,
           workspacePath,
           estimatedTime: estimate.estimatedDescription,
           estimatedCompletionAt: estimate.estimatedCompletion,
+          nextStep: `Wait ${estimate.whenToCheck}, then call index_status to verify completion`,
           instructions: [
-            `Expected to complete in ${estimate.estimatedDescription}`,
-            "Monitor progress: Call index_status({ workspacePath: \"" + workspacePath + "\" })",
-            "View detailed logs: tail -f " + (process.env.COMETIX_LOG_FILE || "/tmp/cometix-indexer.log"),
+            `⏱️  Estimated time: ${estimate.estimatedDescription}`,
+            `⏰  Wait until ${new Date(estimate.estimatedCompletion).toLocaleTimeString('zh-CN')}`,
+            `📊  Then check: index_status({ workspacePath: "${workspacePath}" })`,
+            `📝  Watch logs: tail -f ${process.env.COMETIX_LOG_FILE || "/tmp/cometix-indexer.log"}`,
           ]
         };
         

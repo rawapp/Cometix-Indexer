@@ -17,6 +17,7 @@ export declare function createRepositoryIndexer(ctx: IndexerContext): {
         estimatedSeconds: number;
         estimatedDescription: string;
         estimatedCompletion: string;
+        whenToCheck: string;
     }>;
     getIndexStatus: (workspacePath: string) => Promise<IndexingProgress>;
     autoSyncIfNeeded: (workspacePath: string) => Promise<void>;
